@@ -1,19 +1,23 @@
 env:
   source_num_envs: 4
-  source_num_levels: 200
+  source_num_levels: 100
   target_num_envs: 4
   target_num_levels: 0
 
 ppo:
-  num_steps: 80000000
+  num_steps: 10000000
   batch_size: 256
   unroll_length: 128
-  lr: 2.5e-4
+  lr: 5.e-4
   adam_eps: 1.e-5
-  gamma: 0.99
-  clip_param: 0.1
-  num_gradient_steps: 4
+  gamma: 0.999
+  clip_param: 0.2
+  num_gradient_steps: 3
   value_loss_coef: 0.5
   entropy_coef: 0.01
   lambd: 0.95
   max_grad_norm: 0.5
+
+wappo:
+  num_critic: 5
+  lambda_gp: 10.0

@@ -50,12 +50,12 @@ class PPONetwork(nn.Module):
         return values, log_probs, mean_entropy
 
 
-class WAPPONetwork(PPONetwork):
+class CriticNetwork(nn.Module):
 
-    def __init__(self, img_shape, action_dim, feature_dim=512):
-        super().__init__(img_shape, action_dim, feature_dim)
+    def __init__(self, feature_dim=512):
+        super().__init__()
 
-        self.critic_net = nn.Sequential(
+        self.net = nn.Sequential(
             nn.Linear(feature_dim, 512),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(512, 512),
@@ -73,8 +73,8 @@ class WAPPONetwork(PPONetwork):
             nn.Linear(512, 1)).apply(partial(
                 init_fn, gain=nn.init.calculate_gain('leaky_relu', 0.2)))
 
-    def predict(self, features):
-        return self.critic_net(features)
+    def forward(self, features):
+        return self.net(features)
 
 
 class CNNBody(nn.Module):

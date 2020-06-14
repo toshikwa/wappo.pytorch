@@ -110,7 +110,7 @@ class TargetStorage:
 
         self.states = torch.zeros(
             memory_size, num_envs, *img_shape, device=device,
-            dtype=torch.long)
+            dtype=torch.uint8)
 
         self._p = 0
         self._n = 0
@@ -124,7 +124,7 @@ class TargetStorage:
         self._p = (self._p + 1) % self.memory_size
         self._n = min(self._n + 1, self.memory_size)
 
-    def sample(self):
+    def sample(self, device):
         indices = np.random.randint(low=0, high=self._n, size=self.batch_size)
         states = self.states[:self._n].view(-1, *self.img_shape)[indices]
-        return states
+        return states.to(device)
