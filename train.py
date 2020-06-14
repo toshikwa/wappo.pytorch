@@ -30,7 +30,8 @@ def main(args):
     # Specify the directory to log.
     name = 'wappo' if args.wappo else 'ppo'
     time = datetime.now().strftime("%Y%m%d-%H%M")
-    log_dir = os.path.join(args.log_dir, f'{name}-{args.seed}-{time}')
+    log_dir = os.path.join(
+        args.log_dir, 'cartpole-visual-v1', f'{name}-{args.seed}-{time}')
 
     # Agent.
     if args.wappo:
@@ -49,7 +50,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='config/ppo.yaml')
-    parser.add_argument('--log_dir', default='logs/ppo')
+    parser.add_argument('--log_dir', default='logs')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--wappo', action='store_true')
