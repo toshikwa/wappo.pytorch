@@ -11,9 +11,10 @@ class PPOAgent(BaseAgent):
 
     def __init__(self, source_venv, target_venv, log_dir, device,
                  num_steps=10**6, memory_size=10000, batch_size=256,
-                 unroll_length=128, lr=5e-4, adam_eps=1e-5, gamma=0.999,
+                 unroll_length=128, ppo_lr=5e-4, adam_eps=1e-5, gamma=0.999,
                  ppo_clip_param=0.2, num_gradient_steps=4, value_loss_coef=0.5,
-                 entropy_coef=0.01, lambd=0.95, max_grad_norm=0.5):
+                 entropy_coef=0.01, lambd=0.95, max_grad_norm=0.5,
+                 use_deep=True):
         super().__init__(
             source_venv, target_venv, log_dir, device, num_steps, memory_size,
             batch_size, unroll_length, gamma, ppo_clip_param,
@@ -23,11 +24,12 @@ class PPOAgent(BaseAgent):
         # PPO network.
         self.ppo_network = PPONetwork(
             self.source_venv.observation_space.shape,
-            self.source_venv.action_space.n).to(device)
+            self.source_venv.action_space.n,
+            use_deep=use_deep).to(device)
 
         # Optimizer.
         self.ppo_optim = Adam(
-            self.ppo_network.parameters(), lr=lr, eps=adam_eps)
+            self.ppo_network.parameters(), lr=ppo_lr, eps=adam_eps)
 
     def update(self):
         self.update_ppo()

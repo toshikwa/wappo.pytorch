@@ -99,7 +99,7 @@ class SourceStorage:
 
     def sample(self):
         indices = np.random.randint(
-            low=0, high=len(self.states), size=self.batch_size)
+            low=0, high=self.states.shape[0], size=self.batch_size)
         states = self.states.view(-1, *self.img_shape)[indices]
         return states
 

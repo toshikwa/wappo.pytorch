@@ -8,7 +8,7 @@ ppo:
   num_steps: 1000000
   batch_size: 256
   unroll_length: 128
-  lr: 5.e-4
+  ppo_lr: 5.e-4
   adam_eps: 1.e-5
   gamma: 0.999
   ppo_clip_param: 0.2
@@ -17,7 +17,11 @@ ppo:
   entropy_coef: 0.01
   lambd: 0.95
   max_grad_norm: 0.5
+  use_deep: True
 
 wappo:
+  wappo_lr: 5.e-4
   num_critic: 5
+  use_gp: False
+  lambda_gp: 10.0
   weight_clip_param: 0.01

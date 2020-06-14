@@ -9,24 +9,30 @@ class WAPPOAgent(PPOAgent):
 
     def __init__(self, source_venv, target_venv, log_dir, device,
                  num_steps=10**6, memory_size=10000, batch_size=256,
-                 unroll_length=128, lr=5e-4, adam_eps=1e-5, gamma=0.999,
+                 unroll_length=128, ppo_lr=5e-4, adam_eps=1e-5, gamma=0.999,
                  ppo_clip_param=0.2, num_gradient_steps=4, value_loss_coef=0.5,
                  entropy_coef=0.01, lambd=0.95, max_grad_norm=0.5,
-                 num_critic=5, weight_clip_param=0.01):
+                 use_deep=True, wappo_lr=5e-5, num_critic=5, use_gp=True,
+                 lambda_gp=10.0, weight_clip_param=0.01):
         super().__init__(
             source_venv, target_venv, log_dir, device, num_steps, memory_size,
-            batch_size, unroll_length, lr, adam_eps, gamma, ppo_clip_param,
+            batch_size, unroll_length, ppo_lr, adam_eps, gamma, ppo_clip_param,
             num_gradient_steps, value_loss_coef, entropy_coef, lambd,
-            max_grad_norm)
+            max_grad_norm, use_deep)
 
         # Critic network.
-        self.critic_network = CriticNetwork().to(device)
+        self.critic_network = CriticNetwork(
+            feature_dim=self.ppo_network.feature_dim).to(device)
 
         # Optimizer.
         self.critic_optim = Adam(
-            self.critic_network.parameters(), lr=lr, eps=adam_eps)
+            self.critic_network.parameters(), lr=wappo_lr, eps=adam_eps)
+        self.feature_optim = Adam(
+            self.ppo_network.body_net.parameters(), lr=wappo_lr, eps=adam_eps)
 
         self.num_critic = num_critic
+        self.use_gp = use_gp
+        self.lambda_gp = lambda_gp
         self.weight_clip_param = weight_clip_param
 
     def update(self):
@@ -47,16 +53,25 @@ class WAPPOAgent(PPOAgent):
             source_preds = self.critic_network(source_features)
             target_preds = self.critic_network(target_features)
 
+            if self.use_gp:
+                penalty = -self.lambda_gp * self.calculate_gradient_penalty(
+                    source_features, target_features)
+            else:
+                penalty = 0.0
+
             # Calculate critic's loss.
-            critic_loss = -torch.mean(source_preds) + torch.mean(target_preds)
+            critic_loss = \
+                torch.mean(source_preds) - torch.mean(target_preds) + penalty
 
             self.critic_optim.zero_grad()
             critic_loss.backward()
             self.critic_optim.step()
 
             # Clip weights of the critic.
-            for p in self.critic_network.parameters():
-                p.data.clamp_(-self.weight_clip_param, self.weight_clip_param)
+            if not self.use_gp:
+                for p in self.critic_network.parameters():
+                    p.data.clamp_(
+                        -self.weight_clip_param, self.weight_clip_param)
 
             mean_critic_loss += critic_loss.detach() / self.num_critic
 
@@ -70,11 +85,11 @@ class WAPPOAgent(PPOAgent):
         target_preds = self.critic_network(target_features)
 
         # Calculate encoder's loss.
-        encoder_loss = torch.mean(source_preds) - torch.mean(target_preds)
+        encoder_loss = -torch.mean(source_preds) + torch.mean(target_preds)
 
-        self.ppo_optim.zero_grad()
+        self.feature_optim.zero_grad()
         encoder_loss.backward()
-        self.ppo_optim.step()
+        self.feature_optim.step()
 
         self.writer.add_scalar(
             'loss/critic', mean_critic_loss, self.steps)

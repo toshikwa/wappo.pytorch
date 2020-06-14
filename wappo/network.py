@@ -17,11 +17,16 @@ class Flatten(nn.Module):
 
 class PPONetwork(nn.Module):
 
-    def __init__(self, img_shape, action_dim, feature_dim=512):
+    def __init__(self, img_shape, action_dim, use_deep=False):
         super().__init__()
-        self.body_net = CNNBody(img_shape[0], feature_dim)
-        self.value_net = nn.Linear(feature_dim, 1).apply(init_fn)
-        self.policy_net = Categorical(feature_dim, action_dim)
+        self.feature_dim = 256 if use_deep else 512
+
+        if use_deep:
+            self.body_net = ImpalaCNNBody(img_shape[0], self.feature_dim)
+        else:
+            self.body_net = NatureCNNBody(img_shape[0], self.feature_dim)
+        self.value_net = nn.Linear(self.feature_dim, 1).apply(init_fn)
+        self.policy_net = Categorical(self.feature_dim, action_dim)
 
     def forward(self, states, deterministic=False):
         features = self.body_net(states)
@@ -77,7 +82,7 @@ class CriticNetwork(nn.Module):
         return self.net(features)
 
 
-class CNNBody(nn.Module):
+class NatureCNNBody(nn.Module):
 
     def __init__(self, num_channels, feature_dim=512):
         super().__init__()
@@ -93,6 +98,51 @@ class CNNBody(nn.Module):
             nn.Linear(32 * 4 * 4, feature_dim),
             nn.ReLU()
         ).apply(partial(init_fn, gain=nn.init.calculate_gain('relu')))
+
+    def forward(self, states):
+        if states.dtype == torch.uint8:
+            states = states.float() / 255.0
+        return self.net(states)
+
+
+class ResidualBlock(nn.Module):
+
+    def __init__(self, num_channels):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(num_channels, num_channels, 3, 1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(num_channels, num_channels, 3, 1, padding=1),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.net(x) + x
+
+
+class ImpalaCNNBody(nn.Module):
+
+    def __init__(self, num_channels, feature_dim=256):
+        super().__init__()
+
+        in_channels = num_channels
+        layers = []
+        for out_channels, num_blocks in [(16, 2), (32, 2), (32, 2)]:
+            layers.extend([
+                nn.Conv2d(in_channels, out_channels, 3, 1, padding=1),
+                nn.ReLU(inplace=True),
+                nn.MaxPool2d(3, 2, padding=1)
+            ])
+            for _ in range(num_blocks):
+                layers.append(ResidualBlock(out_channels))
+            in_channels = out_channels
+
+        layers.extend([
+            Flatten(),
+            nn.Linear(32 * 8 * 8, feature_dim),
+            nn.ReLU(inplace=True)
+        ])
+        self.net = nn.Sequential(*layers)
 
     def forward(self, states):
         if states.dtype == torch.uint8:

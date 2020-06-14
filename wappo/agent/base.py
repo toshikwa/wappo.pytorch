@@ -76,7 +76,7 @@ class BaseAgent(ABC):
             self.run_source()
             self.update()
 
-            print(f"\rSteps: {self.steps}   "
+            print(f"Steps: {self.steps}   "
                   f"Source Return: {np.mean(self.source_return):5.3f}  "
                   f"Target Return: {np.mean(self.target_return):5.3f}")
 
