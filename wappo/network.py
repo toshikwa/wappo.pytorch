@@ -17,66 +17,87 @@ class Flatten(nn.Module):
 
 class PPONetwork(nn.Module):
 
-    def __init__(self, img_shape, action_dim):
+    def __init__(self, img_shape, action_dim, feature_dim=512):
         super().__init__()
-        self.base = CNNBase(img_shape[0])
-        self.dist = Categorical(self.base.output_size, action_dim)
+        self.body_net = CNNBody(img_shape[0], feature_dim)
+        self.value_net = nn.Linear(feature_dim, 1).apply(init_fn)
+        self.policy_net = Categorical(feature_dim, action_dim)
 
     def forward(self, states, deterministic=False):
-        value, actor_features = self.base(states)
-        dist = self.dist(actor_features)
+        features = self.body_net(states)
+        values = self.value_net(features)
+        action_dists = self.policy_net(features)
 
         if deterministic:
-            action = dist.mode()
+            actions = action_dists.mode()
         else:
-            action = dist.sample()
+            actions = action_dists.sample()
+        log_probs = action_dists.log_probs(actions)
+        return values, actions, log_probs
 
-        action_log_probs = dist.log_probs(action)
+    def calculate_values(self, states):
+        features = self.body_net(states)
+        values = self.value_net(features)
+        return values
 
-        return value, action, action_log_probs
+    def evaluate_actions(self, states, actions):
+        features = self.body_net(states)
+        values = self.value_net(features)
+        action_dists = self.policy_net(features)
 
-    def calculate_value(self, states):
-        value, _ = self.base(states)
-        return value
-
-    def evaluate_actions(self, states, action):
-        value, actor_features = self.base(states)
-        dist = self.dist(actor_features)
-
-        action_log_probs = dist.log_probs(action)
-        dist_entropy = dist.entropy().mean()
-
-        return value, action_log_probs, dist_entropy
+        log_probs = action_dists.log_probs(actions)
+        mean_entropy = action_dists.entropy().mean()
+        return values, log_probs, mean_entropy
 
 
-class CNNBase(nn.Module):
+class WAPPONetwork(PPONetwork):
 
-    def __init__(self, num_inputs, hidden_size=512):
+    def __init__(self, img_shape, action_dim, feature_dim=512):
+        super().__init__(img_shape, action_dim, feature_dim)
+
+        self.critic_net = nn.Sequential(
+            nn.Linear(feature_dim, 512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512, 512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512, 512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512, 512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512, 512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512, 512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512, 512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512, 1)).apply(partial(
+                init_fn, gain=nn.init.calculate_gain('leaky_relu', 0.2)))
+
+    def predict(self, features):
+        return self.critic_net(features)
+
+
+class CNNBody(nn.Module):
+
+    def __init__(self, num_channels, feature_dim=512):
         super().__init__()
 
-        self._hidden_size = hidden_size
-
-        self.main = nn.Sequential(
-            nn.Conv2d(num_inputs, 32, 8, stride=4),
+        self.net = nn.Sequential(
+            nn.Conv2d(num_channels, 32, 8, stride=4),
             nn.ReLU(),
             nn.Conv2d(32, 64, 4, stride=2),
             nn.ReLU(),
             nn.Conv2d(64, 32, 3, stride=1),
             nn.ReLU(),
             Flatten(),
-            nn.Linear(32 * 4 * 4, hidden_size),
+            nn.Linear(32 * 4 * 4, feature_dim),
             nn.ReLU()
         ).apply(partial(init_fn, gain=nn.init.calculate_gain('relu')))
 
-        self.critic_linear = nn.Linear(hidden_size, 1).apply(init_fn)
-
-    @property
-    def output_size(self):
-        return self._hidden_size
-
-    def forward(self, inputs):
-        x = self.main(inputs / 255.0)
-        return self.critic_linear(x), x
+    def forward(self, states):
+        if states.dtype == torch.uint8:
+            states = states.float() / 255.0
+        return self.net(states)
 
 
 class FixedCategorical(torch.distributions.Categorical):
@@ -85,13 +106,8 @@ class FixedCategorical(torch.distributions.Categorical):
         return super().sample().unsqueeze(-1)
 
     def log_probs(self, actions):
-        return (
-            super()
-            .log_prob(actions.squeeze(-1))
-            .view(actions.size(0), -1)
-            .sum(-1)
-            .unsqueeze(-1)
-        )
+        return super().log_prob(actions.squeeze(-1)).view(
+            actions.size(0), -1).sum(-1).unsqueeze(-1)
 
     def mode(self):
         return self.probs.argmax(dim=-1, keepdim=True)
@@ -99,12 +115,10 @@ class FixedCategorical(torch.distributions.Categorical):
 
 class Categorical(nn.Module):
 
-    def __init__(self, num_inputs, num_outputs):
+    def __init__(self, feature_dim, action_dim):
         super().__init__()
-
-        self.linear = nn.Linear(num_inputs, num_outputs).apply(
+        self.linear = nn.Linear(feature_dim, action_dim).apply(
             partial(init_fn, gain=0.01))
 
-    def forward(self, x):
-        x = self.linear(x)
-        return FixedCategorical(logits=x)
+    def forward(self, features):
+        return FixedCategorical(logits=self.linear(features))

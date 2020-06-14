@@ -6,17 +6,17 @@ from torch import nn
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
 
-from .network import PPONetwork
-from .storage import SourceStorage, TargetStorage
+from wappo.network import PPONetwork
+from wappo.storage import SourceStorage, TargetStorage
 
 
 class PPOAgent:
 
     def __init__(self, source_venv, target_venv, log_dir, device,
-                 num_steps=10**6, batch_size=256, unroll_length=128,
-                 lr=5e-4, adam_eps=1e-5, gamma=0.999, clip_param=0.2,
-                 num_gradient_steps=4, value_loss_coef=0.5, entropy_coef=0.01,
-                 lambd=0.95, max_grad_norm=0.5):
+                 num_steps=10**6, memory_size=10000, batch_size=256,
+                 unroll_length=128, lr=5e-4, adam_eps=1e-5, gamma=0.999,
+                 clip_param=0.2, num_gradient_steps=4, value_loss_coef=0.5,
+                 entropy_coef=0.01, lambd=0.95, max_grad_norm=0.5):
 
         self.source_venv = source_venv
         self.target_venv = target_venv
@@ -59,8 +59,6 @@ class PPOAgent:
         self.unroll_length = unroll_length
         # Number of staps to update.
         self.num_updates = num_steps // (unroll_length * source_venv.num_envs)
-        # Number of gradient staps per update.
-        self.num_gradient_steps = num_gradient_steps
 
         # Hyperparameters.
         self.num_envs = source_venv.num_envs
@@ -73,15 +71,16 @@ class PPOAgent:
 
     def run(self):
         self.states = torch.tensor(
-            self.source_venv.reset(), dtype=torch.float, device=self.device)
+            self.source_venv.reset(), dtype=torch.uint8, device=self.device)
         self.source_storage.init_states(self.states)
         self.target_states = torch.tensor(
-            self.target_venv.reset(), dtype=torch.float, device=self.device)
+            self.target_venv.reset(), dtype=torch.uint8, device=self.device)
         self.target_storage.insert(self.target_states)
 
         for step in range(self.num_updates):
-            self.run_source()
             self.run_target()
+            self.run_source()
+            self.update()
 
             print(f"\rSteps: {self.steps}   "
                   f"Source Return: {np.mean(self.source_return):5.3f}  "
@@ -107,52 +106,16 @@ class PPOAgent:
                     self.source_return.append(info['episode']['r'])
 
             self.states = torch.tensor(
-                next_states, dtype=torch.float, device=self.device)
+                next_states, dtype=torch.uint8, device=self.device)
 
             self.source_storage.insert(
                 self.states, actions, rewards, dones, action_log_probs,
                 values)
 
         with torch.no_grad():
-            next_values = self.network.calculate_value(self.states)
+            next_values = self.network.calculate_values(self.states)
 
         self.source_storage.end_rollout(next_values)
-        self.update()
-
-    def update(self):
-        for sample in self.source_storage.iter():
-            states, actions, pred_values, \
-                target_values, log_probs_old, advs = sample
-
-            # Reshape to do in a single forward pass for all steps.
-            values, action_log_probs, dist_entropy = \
-                self.network.evaluate_actions(states, actions)
-
-            ratio = torch.exp(action_log_probs - log_probs_old)
-
-            loss_policy = -torch.min(ratio * advs, torch.clamp(
-                ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * advs
-            ).mean()
-
-            value_pred_clipped = pred_values + (
-                values - pred_values
-            ).clamp(-self.clip_param, self.clip_param)
-
-            loss_value = 0.5 * torch.max(
-                (values - target_values).pow(2),
-                (value_pred_clipped - target_values).pow(2)
-            ).mean()
-
-            self.optimizer.zero_grad()
-            loss = (
-                loss_policy
-                + self.value_loss_coef * loss_value
-                - self.entropy_coef * dist_entropy
-            )
-            loss.backward()
-            nn.utils.clip_grad_norm_(
-                self.network.parameters(), self.max_grad_norm)
-            self.optimizer.step()
 
     def run_target(self):
         for _ in range(self.unroll_length):
@@ -167,9 +130,53 @@ class PPOAgent:
                     self.target_return.append(info['episode']['r'])
 
             self.target_states = torch.tensor(
-                next_states, dtype=torch.float, device=self.device)
+                next_states, dtype=torch.uint8, device=self.device)
 
             self.target_storage.insert(self.target_states)
+
+    def update(self):
+        self.update_ppo()
+
+    def update_ppo(self):
+        mean_policy_loss = 0.0
+        mean_value_loss = 0.0
+
+        for sample in self.source_storage.iter():
+            states, actions, pred_values, \
+                target_values, log_probs_old, advs = sample
+
+            # Reshape to do in a single forward pass for all steps.
+            values, action_log_probs, dist_entropy = \
+                self.network.evaluate_actions(states, actions)
+
+            ratio = torch.exp(action_log_probs - log_probs_old)
+
+            policy_loss = -torch.min(ratio * advs, torch.clamp(
+                ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * advs
+            ).mean()
+
+            value_pred_clipped = pred_values + (
+                values - pred_values
+            ).clamp(-self.clip_param, self.clip_param)
+
+            value_loss = 0.5 * torch.max(
+                (values - target_values).pow(2),
+                (value_pred_clipped - target_values).pow(2)
+            ).mean()
+
+            self.optimizer.zero_grad()
+            loss = policy_loss + self.value_loss_coef * value_loss \
+                - self.entropy_coef * dist_entropy
+            loss.backward()
+            nn.utils.clip_grad_norm_(
+                self.network.parameters(), self.max_grad_norm)
+            self.optimizer.step()
+
+            mean_policy_loss += policy_loss.detach()
+            mean_value_loss += value_loss.detach()
+
+        self.writer.add_scalar('loss/policy', mean_policy_loss, self.steps)
+        self.writer.add_scalar('loss/value', mean_value_loss, self.steps)
 
     def save_models(self, filename):
         torch.save(

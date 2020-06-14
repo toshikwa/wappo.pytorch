@@ -10,7 +10,8 @@ class SourceStorage:
 
         # Transitions.
         self.states = torch.zeros(
-            unroll_length + 1, num_envs, *img_shape, device=device)
+            unroll_length + 1, num_envs, *img_shape, device=device,
+            dtype=torch.uint8)
         self.rewards = torch.zeros(
             unroll_length, num_envs, 1, device=device)
         self.actions = torch.zeros(
@@ -96,13 +97,20 @@ class SourceStorage:
         self.dones[0].copy_(self.dones[-1])
         self._is_ready = False
 
+    def sample(self):
+        indices = np.random.randint(
+            low=0, high=len(self.states), size=self.batch_size)
+        states = self.states.view(-1, *self.img_shape)[indices]
+        return states
+
 
 class TargetStorage:
 
     def __init__(self, memory_size, num_envs, batch_size, img_shape, device):
 
         self.states = torch.zeros(
-            memory_size, num_envs, *img_shape, device=device)
+            memory_size, num_envs, *img_shape, device=device,
+            dtype=torch.long)
 
         self._p = 0
         self._n = 0
