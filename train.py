@@ -28,9 +28,9 @@ def main(args):
         num_levels=config['env']['target_num_levels'])
 
     # Specify the directory to log.
+    name = 'wappo' if args.wappo else 'ppo'
     time = datetime.now().strftime("%Y%m%d-%H%M")
-    log_dir = os.path.join(
-        args.log_dir, f'PPO-{args.seed}-{time}')
+    log_dir = os.path.join(args.log_dir, f'{name}-{args.seed}-{time}')
 
     # Agent.
     if args.wappo:
