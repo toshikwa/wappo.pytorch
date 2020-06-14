@@ -4,9 +4,10 @@ from .vec_monitor import VecMonitor
 from .vec_normalize import VecNormalize
 
 
-def make_cartpole(num_envs=4, num_levels=0):
+def make_cartpole(num_envs=4, num_levels=0, start_level=0):
     venv = gym.vector.make(
-        'cartpole-visual-v1', num_envs=num_envs, num_levels=num_levels)
+        'cartpole-visual-v1', num_envs=num_envs,
+        num_levels=num_levels, start_level=start_level)
     venv.observation_space = gym.spaces.Box(
         low=0, high=255, shape=(3, 64, 64), dtype=np.uint8)
     venv.action_space = gym.spaces.Discrete(2)

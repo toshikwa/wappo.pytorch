@@ -66,6 +66,11 @@ class BaseAgent(ABC):
             self.target_venv.reset(), dtype=torch.uint8, device=self.device)
         self.target_storage.insert(self.target_states)
 
+        self.writer.add_image(
+            'image/source_env', self.states[0], self.steps)
+        self.writer.add_image(
+            'image/target_env', self.target_states[0], self.steps)
+
         for step in range(self.num_updates):
             self.run_target()
             self.run_source()

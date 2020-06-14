@@ -10,7 +10,6 @@ import gym
 from gym import spaces
 from gym.utils import seeding
 import numpy as np
-from random import randrange
 
 
 class CartPoleVisualEnv(gym.Env):
@@ -41,26 +40,24 @@ class CartPoleVisualEnv(gym.Env):
         # Angle at which to fail the episode.
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
         self.x_threshold = 2.4
-        self.offset = start_level
 
         self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(
             low=0, high=255, shape=(3, 64, 64), dtype=np.uint8)
 
+        self.start_level = start_level
         self.num_levels = num_levels
-        if self.num_levels == 0:
-            self.seed = self.seed_set(randrange(2**32))
-        else:
-            to_set = self.offset
-            self.seed = self.seed_set(to_set)
+        self.seed_set()
         self.viewer = None
         self.state = None
-
         self.steps_beyond_done = None
 
-    def seed_set(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return seed
+    def seed_set(self):
+        if self.num_levels == 0:
+            seed = np.random.randint(low=0, high=2**32)
+        else:
+            seed = self.num_levels
+        self.np_random, self.seed = seeding.np_random(seed)
 
     def step(self, action):
         assert self.action_space.contains(action)
@@ -109,10 +106,7 @@ class CartPoleVisualEnv(gym.Env):
         return self._process_obs(img), reward, done, dic
 
     def reset(self):
-        if self.num_levels == 0:
-            self.seed = self.seed_set(randrange(2**32))
-        else:
-            self.seed = self.seed_set(self.offset)
+        self.seed_set()
         self.state = np.random.uniform(low=-0.05, high=0.05, size=(4,))
         self.steps_beyond_done = None
         img = self.render()
