@@ -8,43 +8,43 @@ from pyvirtualdisplay import Display
 from wappo.agent import PPOAgent, WAPPOAgent
 from wappo.env import make_cartpole
 
-display = Display(visible=0, size=(100, 100), backend="xvfb")
-display.start()
-
 
 def main(args):
-    with open(args.config) as f:
-        config = yaml.load(f, Loader=yaml.SafeLoader)
 
-    device = torch.device(
-        'cuda' if args.cuda and torch.cuda.is_available() else 'cpu')
+    with Display(visible=0, size=(100, 100), backend="xvfb") as disp:
+        with open(args.config) as f:
+            config = yaml.load(f, Loader=yaml.SafeLoader)
 
-    # Make environments.
-    source_venv = make_cartpole(
-        num_envs=config['env']['source_num_envs'],
-        num_levels=config['env']['source_num_levels'])
-    target_venv = make_cartpole(
-        num_envs=config['env']['target_num_envs'],
-        num_levels=config['env']['target_num_levels'])
+        device = torch.device(
+            'cuda' if args.cuda and torch.cuda.is_available() else 'cpu')
 
-    # Specify the directory to log.
-    name = 'wappo' if args.wappo else 'ppo'
-    time = datetime.now().strftime("%Y%m%d-%H%M")
-    log_dir = os.path.join(
-        args.log_dir, 'cartpole-visual-v1', f'{name}-{args.seed}-{time}')
+        # Make environments.
+        source_venv = make_cartpole(
+            num_envs=config['env']['source_num_envs'],
+            num_levels=config['env']['source_num_levels'])
+        target_venv = make_cartpole(
+            num_envs=config['env']['target_num_envs'],
+            num_levels=config['env']['target_num_levels'])
 
-    # Agent.
-    if args.wappo:
-        agent = WAPPOAgent(
-            source_venv=source_venv, target_venv=target_venv, device=device,
-            log_dir=log_dir, **config['ppo'], **config['wappo'])
-    else:
-        agent = PPOAgent(
-            source_venv=source_venv, target_venv=target_venv, device=device,
-            log_dir=log_dir, **config['ppo'])
+        # Specify the directory to log.
+        name = 'wappo' if args.wappo else 'ppo'
+        time = datetime.now().strftime("%Y%m%d-%H%M")
+        log_dir = os.path.join(
+            args.log_dir, 'cartpole-visual-v1', f'{name}-{args.seed}-{time}')
 
-    agent.run()
-    agent.save_models(filename='final_model.pth')
+        # Agent.
+        if args.wappo:
+            agent = WAPPOAgent(
+                source_venv=source_venv, target_venv=target_venv,
+                device=device, log_dir=log_dir,
+                **config['ppo'], **config['wappo'])
+        else:
+            agent = PPOAgent(
+                source_venv=source_venv, target_venv=target_venv,
+                device=device, log_dir=log_dir, **config['ppo'])
+
+        agent.run()
+        agent.save_models(filename='final_model.pth')
 
 
 if __name__ == "__main__":

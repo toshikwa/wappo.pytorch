@@ -12,7 +12,7 @@ class BaseAgent(ABC):
 
     def __init__(self, source_venv, target_venv, log_dir, device,
                  num_steps=10**6, memory_size=10000, batch_size=256,
-                 unroll_length=128, gamma=0.999, clip_param=0.2,
+                 unroll_length=128, gamma=0.999, ppo_clip_param=0.2,
                  num_gradient_steps=4, value_loss_coef=0.5,
                  entropy_coef=0.01, lambd=0.95, max_grad_norm=0.5):
 
@@ -53,7 +53,7 @@ class BaseAgent(ABC):
         # Hyperparameters.
         self.num_envs = source_venv.num_envs
         self.gamma = gamma
-        self.clip_param = clip_param
+        self.ppo_clip_param = ppo_clip_param
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef
         self.max_grad_norm = max_grad_norm

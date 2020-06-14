@@ -10,12 +10,12 @@ class WAPPOAgent(PPOAgent):
     def __init__(self, source_venv, target_venv, log_dir, device,
                  num_steps=10**6, memory_size=10000, batch_size=256,
                  unroll_length=128, lr=5e-4, adam_eps=1e-5, gamma=0.999,
-                 clip_param=0.2, num_gradient_steps=4, value_loss_coef=0.5,
+                 ppo_clip_param=0.2, num_gradient_steps=4, value_loss_coef=0.5,
                  entropy_coef=0.01, lambd=0.95, max_grad_norm=0.5,
-                 num_critic=5, lambda_gp=10.0):
+                 num_critic=5, weight_clip_param=0.01):
         super().__init__(
             source_venv, target_venv, log_dir, device, num_steps, memory_size,
-            batch_size, unroll_length, lr, adam_eps, gamma, clip_param,
+            batch_size, unroll_length, lr, adam_eps, gamma, ppo_clip_param,
             num_gradient_steps, value_loss_coef, entropy_coef, lambd,
             max_grad_norm)
 
@@ -27,7 +27,7 @@ class WAPPOAgent(PPOAgent):
             self.critic_network.parameters(), lr=lr, eps=adam_eps)
 
         self.num_critic = num_critic
-        self.lambda_gp = lambda_gp
+        self.weight_clip_param = weight_clip_param
 
     def update(self):
         self.update_ppo()
@@ -47,17 +47,16 @@ class WAPPOAgent(PPOAgent):
             source_preds = self.critic_network(source_features)
             target_preds = self.critic_network(target_features)
 
-            # Calculate gradient penalty.
-            gradient_penalty = self.calculate_gradient_penalty(
-                source_features, target_features)
-
             # Calculate critic's loss.
-            critic_loss = -torch.mean(source_preds) \
-                + torch.mean(target_preds) + self.lambda_gp * gradient_penalty
+            critic_loss = -torch.mean(source_preds) + torch.mean(target_preds)
 
             self.critic_optim.zero_grad()
             critic_loss.backward()
             self.critic_optim.step()
+
+            # Clip weights of the critic.
+            for p in self.critic_network.parameters():
+                p.data.clamp_(-self.weight_clip_param, self.weight_clip_param)
 
             mean_critic_loss += critic_loss.detach() / self.num_critic
 

@@ -12,12 +12,13 @@ class PPOAgent(BaseAgent):
     def __init__(self, source_venv, target_venv, log_dir, device,
                  num_steps=10**6, memory_size=10000, batch_size=256,
                  unroll_length=128, lr=5e-4, adam_eps=1e-5, gamma=0.999,
-                 clip_param=0.2, num_gradient_steps=4, value_loss_coef=0.5,
+                 ppo_clip_param=0.2, num_gradient_steps=4, value_loss_coef=0.5,
                  entropy_coef=0.01, lambd=0.95, max_grad_norm=0.5):
         super().__init__(
             source_venv, target_venv, log_dir, device, num_steps, memory_size,
-            batch_size, unroll_length, gamma, clip_param, num_gradient_steps,
-            value_loss_coef, entropy_coef, lambd, max_grad_norm)
+            batch_size, unroll_length, gamma, ppo_clip_param,
+            num_gradient_steps, value_loss_coef, entropy_coef, lambd,
+            max_grad_norm)
 
         # PPO network.
         self.ppo_network = PPONetwork(
@@ -47,12 +48,12 @@ class PPOAgent(BaseAgent):
             ratio = torch.exp(action_log_probs - log_probs_old)
 
             policy_loss = -torch.min(ratio * advs, torch.clamp(
-                ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * advs
-            ).mean()
+                ratio, 1.0 - self.ppo_clip_param,
+                1.0 + self.ppo_clip_param) * advs).mean()
 
             value_pred_clipped = pred_values + (
                 values - pred_values
-            ).clamp(-self.clip_param, self.clip_param)
+            ).clamp(-self.ppo_clip_param, self.ppo_clip_param)
 
             value_loss = 0.5 * torch.max(
                 (values - target_values).pow(2),
