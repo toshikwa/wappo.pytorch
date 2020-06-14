@@ -1,5 +1,5 @@
 from gym.envs.registration import register
-from .env.cartpole import CartPoleVisualEnv
+from .env import CartPoleVisualEnv, VecMonitor,  VecNormalize
 
 
 register(

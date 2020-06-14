@@ -45,7 +45,7 @@ class CartPoleVisualEnv(gym.Env):
 
         # Observations are images.
         self.observation_space = spaces.Box(
-            low=0, high=255, shape=(64, 64, 3), dtype=np.uint8)
+            low=0, high=255, shape=(3, 64, 64), dtype=np.uint8)
         self.action_space = spaces.Discrete(2)
 
         self.num_levels = num_levels
@@ -117,7 +117,7 @@ class CartPoleVisualEnv(gym.Env):
         img = self.render()
         done = np.int64(done).astype(np.int32)
         dic = {'level_seed': np.int32(self.seed)}
-        return img, reward, done, dic
+        return self._process_obs(img), reward, done, dic
 
     def reset(self):
         if self.num_levels == 0:
@@ -126,7 +126,10 @@ class CartPoleVisualEnv(gym.Env):
             self.seed = self.seed_set(self.offset)
         self.state = np.random.uniform(low=-0.05, high=0.05, size=(4,))
         self.steps_beyond_done = None
-        return self.render()
+        return self._process_obs(self.render())
+
+    def _process_obs(self, img):
+        return np.transpose(img, axes=(2, 0, 1))
 
     def change_color(self):
         self.polecolor = np.clip(self.np_random.normal(0.5, 0.5, 3), 0., 1.)
