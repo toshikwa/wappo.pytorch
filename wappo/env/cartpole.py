@@ -1,11 +1,11 @@
 # It's mainly derived from https://github.com/joshnroy/gym-cartpole-visual.
 
 import math
+import numpy as np
+from random import randrange
 import gym
 from gym import spaces
 from gym.utils import seeding
-import numpy as np
-from random import randrange
 from gym.envs.classic_control import rendering
 
 
@@ -15,11 +15,10 @@ class CartPoleVisualEnv(gym.Env):
         'render.modes': ['human', 'rgb_array'],
         'video.frames_per_second': 50
     }
-    rendering_scale = 1
     screen_width = 64
     screen_height = 64
 
-    def __init__(self, num_levels=0, start_level=0):
+    def __init__(self, num_levels=0, start_level=0, rendering_scale=1):
         self.gravity = 9.8
         self.masscart = 1.0
         self.masspole = 0.1
@@ -37,6 +36,7 @@ class CartPoleVisualEnv(gym.Env):
         self.axlecolor = np.array([1., 0., 1.])
         self.trackcolor = np.array([0., 1., 1.])
         self.backgroundcolor = np.array([1., 1., 1.])
+        self.rendering_scale = rendering_scale
 
         # Angle at which to fail the episode.
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
@@ -116,7 +116,7 @@ class CartPoleVisualEnv(gym.Env):
 
         img = self.render()
         done = np.int64(done).astype(np.int32)
-        dic = {"level_seed": np.int32(self.seed)}
+        dic = {'level_seed': np.int32(self.seed)}
         return img, reward, done, dic
 
     def reset(self):
