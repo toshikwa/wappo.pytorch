@@ -52,7 +52,7 @@ class PPONetwork(nn.Module):
 
         log_probs = action_dists.log_probs(actions)
         mean_entropy = action_dists.entropy().mean()
-        return values, log_probs, mean_entropy
+        return values, log_probs, mean_entropy, features
 
 
 class CriticNetwork(nn.Module):
@@ -97,11 +97,11 @@ class NatureCNNBody(nn.Module):
             Flatten(),
             nn.Linear(32 * 4 * 4, feature_dim),
             nn.ReLU()
-        ).apply(partial(init_fn, gain=nn.init.calculate_gain('relu')))
+        )
 
     def forward(self, states):
-        if states.dtype == torch.uint8:
-            states = states.float() / 255.0
+        assert states.dtype == torch.uint8
+        states = states.float() / 255.0
         return self.net(states)
 
 
@@ -145,8 +145,8 @@ class ImpalaCNNBody(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, states):
-        if states.dtype == torch.uint8:
-            states = states.float() / 255.0
+        assert states.dtype == torch.uint8
+        states = states.float() / 255.0
         return self.net(states)
 
 

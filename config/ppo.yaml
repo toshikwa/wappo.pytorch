@@ -9,8 +9,7 @@ ppo:
   batch_size: 256
   unroll_length: 128
   ppo_lr: 5.e-4
-  adam_eps: 1.e-5
-  gamma: 0.999
+  gamma: 0.99
   ppo_clip_param: 0.2
   num_gradient_steps: 3
   value_loss_coef: 0.5
@@ -20,7 +19,7 @@ ppo:
   use_deep: True
 
 wappo:
-  wappo_lr: 5.e-4
+  critic_lr: 5.e-4
   num_critic: 5
   use_gp: False
   lambda_gp: 10.0

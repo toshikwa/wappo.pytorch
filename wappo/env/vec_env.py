@@ -1,19 +1,8 @@
 # This file is mainly derived from https://github.com/openai/baselines.
 
 from abc import ABC, abstractmethod
-import numpy as np
 
-
-def tile_images(nhwc):
-    nhwc = np.asarray(nhwc)
-    N, h, w, c = nhwc.shape
-    H = int(np.ceil(np.sqrt(N)))
-    W = int(np.ceil(float(N)/H))
-    nhwc = np.array(list(nhwc) + [nhwc[0]*0 for _ in range(N, H*W)])
-    HWhwc = np.reshape(nhwc, (H, W, h, w, c))
-    HhWwc = HWhwc.transpose(0, 2, 1, 3, 4)
-    Hh_Ww_c = np.reshape(HhWwc, (H*h, W*w, c))
-    return Hh_Ww_c
+from wappo.utils import tile_images
 
 
 class VecEnv(ABC):

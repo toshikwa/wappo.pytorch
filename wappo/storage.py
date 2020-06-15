@@ -99,7 +99,8 @@ class SourceStorage:
 
     def sample(self):
         indices = np.random.randint(
-            low=0, high=self.states.shape[0], size=self.batch_size)
+            low=0, high=self.states.shape[0] * self.num_envs,
+            size=self.batch_size)
         states = self.states.view(-1, *self.img_shape)[indices]
         return states
 
@@ -108,7 +109,7 @@ class TargetStorage:
 
     def __init__(self, memory_size, num_envs, batch_size, img_shape, device):
 
-        self.states = torch.zeros(
+        self.states = torch.empty(
             memory_size, num_envs, *img_shape, device=device,
             dtype=torch.uint8)
 
@@ -125,6 +126,7 @@ class TargetStorage:
         self._n = min(self._n + 1, self.memory_size)
 
     def sample(self, device):
-        indices = np.random.randint(low=0, high=self._n, size=self.batch_size)
+        indices = np.random.randint(
+            low=0, high=self._n * self.num_envs, size=self.batch_size)
         states = self.states[:self._n].view(-1, *self.img_shape)[indices]
         return states.to(device)
