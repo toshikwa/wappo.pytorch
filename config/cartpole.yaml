@@ -19,8 +19,8 @@ ppo:
   use_deep: True
 
 wappo:
-  adv_batch_size: 64
-  adv_lr: 5.e-5
+  adv_batch_size: 128
+  adv_lr: 5.e-4
   num_critic: 5
   use_gp: False
   lambda_gp: 10.0

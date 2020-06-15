@@ -21,10 +21,10 @@ def main(args):
         # Make environments.
         source_venv = make_cartpole(
             num_envs=config['env']['source_num_envs'],
-            num_levels=config['env']['source_num_levels'])
+            num_levels=config['env']['source_num_levels']+args.seed)
         target_venv = make_cartpole(
             num_envs=config['env']['target_num_envs'],
-            num_levels=config['env']['target_num_levels'])
+            num_levels=config['env']['target_num_levels']+args.seed)
 
         # Specify the directory to log.
         name = 'wappo' if args.wappo else 'ppo'
@@ -49,7 +49,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='config/ppo.yaml')
+    parser.add_argument('--config', type=str, default='config/cartpole.yaml')
     parser.add_argument('--log_dir', default='logs')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--cuda', action='store_true')
