@@ -40,8 +40,8 @@ class BaseAgent(ABC):
 
         self.steps = 0
         self.writer = SummaryWriter(log_dir=summary_dir)
-        self.source_return = deque([0.0], maxlen=10)
-        self.target_return = deque([0.0], maxlen=10)
+        self.source_return = deque([0.0], maxlen=source_venv.num_envs)
+        self.target_return = deque([0.0], maxlen=target_venv.num_envs)
 
         # Batch size.
         self.ppo_batch_size = ppo_batch_size
