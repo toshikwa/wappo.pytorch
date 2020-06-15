@@ -11,7 +11,7 @@ from wappo.env import make_cartpole
 
 def main(args):
 
-    with Display(visible=0, size=(100, 100), backend="xvfb") as disp:
+    with Display(visible=0, size=(100, 100), backend="xvfb"):
         with open(args.config) as f:
             config = yaml.load(f, Loader=yaml.SafeLoader)
 
@@ -20,11 +20,11 @@ def main(args):
 
         # Make environments.
         source_venv = make_cartpole(
-            num_envs=config['env']['source_num_envs'],
-            num_levels=config['env']['source_num_levels']+args.seed)
+            num_envs=config['env']['num_envs'],
+            num_levels=config['env']['num_levels']+args.seed)
         target_venv = make_cartpole(
-            num_envs=config['env']['target_num_envs'],
-            num_levels=config['env']['target_num_levels']+args.seed)
+            num_envs=config['env']['num_envs'],
+            num_levels=2**32-config['env']['num_levels']-args.seed)
 
         # Specify the directory to log.
         name = 'wappo' if args.wappo else 'ppo'

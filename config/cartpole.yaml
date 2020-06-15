@@ -1,8 +1,6 @@
 env:
-  source_num_envs: 64
-  source_num_levels: 100
-  target_num_envs: 64
-  target_num_levels: 200
+  num_envs: 64
+  num_levels: 1
 
 ppo:
   num_steps: 1000000
@@ -19,8 +17,8 @@ ppo:
   use_deep: True
 
 wappo:
-  adv_batch_size: 128
-  adv_lr: 5.e-4
+  adv_batch_size: 64
+  adv_lr: 5.e-5
   num_critic: 5
   use_gp: False
   lambda_gp: 10.0
