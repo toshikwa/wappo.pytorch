@@ -11,7 +11,7 @@ from wappo.storage import SourceStorage, TargetStorage
 class BaseAgent(ABC):
 
     def __init__(self, source_venv, target_venv, log_dir, device,
-                 num_steps=10**6, memory_size=10000, batch_size=256,
+                 num_steps=10**6, memory_size=10000, ppo_batch_size=256,
                  unroll_length=128, gamma=0.999, ppo_clip_param=0.2,
                  num_gradient_steps=4, value_loss_coef=0.5,
                  entropy_coef=0.01, lambd=0.95, max_grad_norm=0.5):
@@ -22,12 +22,12 @@ class BaseAgent(ABC):
 
         # Storage.
         self.source_storage = SourceStorage(
-            unroll_length, source_venv.num_envs, batch_size,
+            unroll_length, source_venv.num_envs,
             source_venv.observation_space.shape, gamma, lambd,
             num_gradient_steps, device)
 
         self.target_storage = TargetStorage(
-            memory_size, target_venv.num_envs, batch_size,
+            memory_size, target_venv.num_envs,
             target_venv.observation_space.shape, torch.device('cpu'))
 
         # For logging.
@@ -44,7 +44,7 @@ class BaseAgent(ABC):
         self.target_return = deque([0.0], maxlen=10)
 
         # Batch size.
-        self.batch_size = batch_size
+        self.ppo_batch_size = ppo_batch_size
         # Unroll length.
         self.unroll_length = unroll_length
         # Number of staps to update.

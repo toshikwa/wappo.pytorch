@@ -55,7 +55,7 @@ class PPONetwork(nn.Module):
         return values, log_probs, mean_entropy, features
 
 
-class CriticNetwork(nn.Module):
+class AdversarialNetwork(nn.Module):
 
     def __init__(self, feature_dim=512):
         super().__init__()

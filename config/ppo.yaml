@@ -1,12 +1,12 @@
 env:
-  source_num_envs: 4
+  source_num_envs: 8
   source_num_levels: 100
   target_num_envs: 4
   target_num_levels: 200
 
 ppo:
   num_steps: 1000000
-  batch_size: 256
+  ppo_batch_size: 256
   unroll_length: 128
   ppo_lr: 5.e-4
   gamma: 0.99
@@ -19,7 +19,8 @@ ppo:
   use_deep: True
 
 wappo:
-  critic_lr: 5.e-4
+  adv_batch_size: 64
+  adv_lr: 5.e-5
   num_critic: 5
   use_gp: False
   lambda_gp: 10.0

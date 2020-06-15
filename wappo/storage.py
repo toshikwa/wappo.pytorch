@@ -5,7 +5,7 @@ from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 class SourceStorage:
 
-    def __init__(self, unroll_length, num_envs, batch_size, img_shape,
+    def __init__(self, unroll_length, num_envs, img_shape,
                  gamma, lambd, num_gradient_steps, device):
 
         # Transitions.
@@ -32,7 +32,6 @@ class SourceStorage:
         self.step = 0
         self.unroll_length = unroll_length
         self.num_envs = num_envs
-        self.batch_size = batch_size
         self.img_shape = img_shape
         self.gamma = gamma
         self.lambd = lambd
@@ -68,7 +67,7 @@ class SourceStorage:
                 self.gamma * self.lambd * (1 - self.dones[step]) * adv
             self.target_values[step] = adv + self.pred_values[step]
 
-    def iter(self):
+    def iter(self, batch_size):
         assert self._is_ready
 
         # Calculate advantages.
@@ -80,7 +79,7 @@ class SourceStorage:
             sampler = BatchSampler(
                 SubsetRandomSampler(
                     range(self.num_envs * self.unroll_length)),
-                self.batch_size, drop_last=True)
+                batch_size, drop_last=True)
 
             for indices in sampler:
                 states = self.states[:-1].view(-1, *self.img_shape)[indices]
@@ -97,17 +96,17 @@ class SourceStorage:
         self.dones[0].copy_(self.dones[-1])
         self._is_ready = False
 
-    def sample(self):
+    def sample(self, batch_size):
         indices = np.random.randint(
             low=0, high=self.states.shape[0] * self.num_envs,
-            size=self.batch_size)
+            size=batch_size)
         states = self.states.view(-1, *self.img_shape)[indices]
         return states
 
 
 class TargetStorage:
 
-    def __init__(self, memory_size, num_envs, batch_size, img_shape, device):
+    def __init__(self, memory_size, num_envs, img_shape, device):
 
         self.states = torch.empty(
             memory_size, num_envs, *img_shape, device=device,
@@ -117,7 +116,6 @@ class TargetStorage:
         self._n = 0
         self.memory_size = memory_size
         self.num_envs = num_envs
-        self.batch_size = batch_size
         self.img_shape = img_shape
 
     def insert(self, states):
@@ -125,8 +123,8 @@ class TargetStorage:
         self._p = (self._p + 1) % self.memory_size
         self._n = min(self._n + 1, self.memory_size)
 
-    def sample(self, device):
+    def sample(self, batch_size, device):
         indices = np.random.randint(
-            low=0, high=self._n * self.num_envs, size=self.batch_size)
+            low=0, high=self._n * self.num_envs, size=batch_size)
         states = self.states[:self._n].view(-1, *self.img_shape)[indices]
         return states.to(device)
