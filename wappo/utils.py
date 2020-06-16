@@ -23,3 +23,9 @@ def tile_images_torch(nchw):
     cHhWw = cHWhw.transpose(0, 1, 3, 2, 4)
     c_Hh_Ww = np.reshape(cHhWw, (c, H*h, W*w))
     return c_Hh_Ww
+
+
+def normalize(tensor):
+    mean = tensor.mean()
+    std = tensor.std() + 1.e-5
+    return (tensor - mean) / std

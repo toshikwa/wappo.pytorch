@@ -17,11 +17,11 @@ class Flatten(nn.Module):
 
 class PPONetwork(nn.Module):
 
-    def __init__(self, img_shape, action_dim, use_deep=False):
+    def __init__(self, img_shape, action_dim, use_impala=False):
         super().__init__()
-        self.feature_dim = 256 if use_deep else 512
+        self.feature_dim = 256 if use_impala else 512
 
-        if use_deep:
+        if use_impala:
             self.body_net = ImpalaCNNBody(img_shape[0], self.feature_dim)
         else:
             self.body_net = NatureCNNBody(img_shape[0], self.feature_dim)
@@ -52,7 +52,7 @@ class PPONetwork(nn.Module):
 
         log_probs = action_dists.log_probs(actions)
         mean_entropy = action_dists.entropy().mean()
-        return values, log_probs, mean_entropy, features
+        return values, log_probs, mean_entropy
 
 
 class AdversarialNetwork(nn.Module):

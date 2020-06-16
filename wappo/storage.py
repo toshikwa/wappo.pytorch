@@ -1,96 +1,98 @@
 import numpy as np
 import torch
-from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
+
+from .utils import normalize
 
 
 class SourceStorage:
 
-    def __init__(self, unroll_length, num_envs, img_shape,
-                 gamma, lambd, num_gradient_steps, device):
+    def __init__(self, num_envs, rollout_length, ppo_epochs, img_shape,
+                 gamma, lambd, device):
 
         # Transitions.
         self.states = torch.zeros(
-            unroll_length + 1, num_envs, *img_shape, device=device,
+            rollout_length + 1, num_envs, *img_shape, device=device,
             dtype=torch.uint8)
         self.rewards = torch.zeros(
-            unroll_length, num_envs, 1, device=device)
+            rollout_length, num_envs, 1, device=device)
         self.actions = torch.zeros(
-            unroll_length, num_envs, 1, device=device, dtype=torch.long)
+            rollout_length, num_envs, 1, device=device, dtype=torch.long)
         self.dones = torch.ones(
-            unroll_length + 1, num_envs, 1, device=device)
+            rollout_length + 1, num_envs, 1, device=device)
 
         # Log of action probabilities based on the current policy.
-        self.action_log_probs = torch.zeros(
-            unroll_length, num_envs, 1, device=device)
+        self.log_probs = torch.zeros(
+            rollout_length, num_envs, 1, device=device)
         # Predictions of V(s_t) based on the current value function.
-        self.pred_values = torch.zeros(
-            unroll_length + 1, num_envs, 1, device=device)
+        self.values = torch.zeros(
+            rollout_length + 1, num_envs, 1, device=device)
         # Target estimate of V(s_t) based on rollouts.
-        self.target_values = torch.zeros(
-            unroll_length, num_envs, 1, device=device)
+        self.value_targets = torch.zeros(
+            rollout_length, num_envs, 1, device=device)
 
         self.step = 0
-        self.unroll_length = unroll_length
+        self.total_batches = num_envs * rollout_length
+
         self.num_envs = num_envs
+        self.rollout_length = rollout_length
+        self.ppo_epochs = ppo_epochs
         self.img_shape = img_shape
         self.gamma = gamma
         self.lambd = lambd
-        self.num_gradient_steps = num_gradient_steps
-
         self._is_ready = False
 
     def init_states(self, states):
         self.states[0].copy_(states)
 
-    def insert(self, next_states, actions, rewards, dones, action_log_probs,
-               pred_values):
+    def insert(self, next_states, actions, rewards, dones, log_probs,
+               values):
         self.states[self.step + 1].copy_(next_states)
         self.actions[self.step].copy_(actions)
         self.rewards[self.step].copy_(torch.from_numpy(rewards[..., None]))
         self.dones[self.step + 1].copy_(torch.from_numpy(dones[..., None]))
 
-        self.action_log_probs[self.step].copy_(action_log_probs)
-        self.pred_values[self.step].copy_(pred_values)
-        self.step = (self.step + 1) % self.unroll_length
+        self.log_probs[self.step].copy_(log_probs)
+        self.values[self.step].copy_(values)
+        self.step = (self.step + 1) % self.rollout_length
 
     def end_rollout(self, next_value):
         assert not self._is_ready
         self._is_ready = True
 
-        self.pred_values[-1].copy_(next_value)
+        self.values[-1].copy_(next_value)
         adv = 0
-        for step in reversed(range(self.unroll_length)):
+        for step in reversed(range(self.rollout_length)):
             td_error = self.rewards[step] + \
-                self.gamma * self.pred_values[step+1] * (1 - self.dones[step])\
-                - self.pred_values[step]
+                self.gamma * self.values[step+1] * (1 - self.dones[step])\
+                - self.values[step]
             adv = td_error + \
                 self.gamma * self.lambd * (1 - self.dones[step]) * adv
-            self.target_values[step] = adv + self.pred_values[step]
+            self.value_targets[step] = adv + self.values[step]
 
     def iter(self, batch_size):
         assert self._is_ready
 
         # Calculate advantages.
-        all_advs = self.target_values - self.pred_values[:-1]
-        all_advs = (all_advs - all_advs.mean()) / (all_advs.std() + 1e-5)
+        all_advantages = self.value_targets - self.values[:-1]
+        all_advantages = normalize(all_advantages)
 
-        for _ in range(self.num_gradient_steps):
-            # Sampler for indices.
-            sampler = BatchSampler(
-                SubsetRandomSampler(
-                    range(self.num_envs * self.unroll_length)),
-                batch_size, drop_last=True)
+        # Indices of samples.
+        indices = np.arange(self.total_batches)
 
-            for indices in sampler:
-                states = self.states[:-1].view(-1, *self.img_shape)[indices]
-                actions = self.actions.view(-1, self.actions.size(-1))[indices]
-                pred_values = self.pred_values[:-1].view(-1, 1)[indices]
-                target_values = self.target_values.view(-1, 1)[indices]
-                action_log_probs = self.action_log_probs.view(-1, 1)[indices]
-                advs = all_advs.view(-1, 1)[indices]
+        for _ in range(self.ppo_epochs):
+            np.random.shuffle(indices)
 
-                yield states, actions, pred_values, \
-                    target_values, action_log_probs, advs
+            for start in range(0, self.total_batches, batch_size):
+                idxes = indices[start:start+batch_size]
+                states = self.states[:-1].view(-1, *self.img_shape)[idxes]
+                actions = self.actions.view(-1, self.actions.size(-1))[idxes]
+                values = self.values[:-1].view(-1, 1)[idxes]
+                value_targets = self.value_targets.view(-1, 1)[idxes]
+                log_probs = self.log_probs.view(-1, 1)[idxes]
+                advantages = all_advantages.view(-1, 1)[idxes]
+
+                yield states, actions, values, value_targets, \
+                    log_probs, advantages
 
         self.states[0].copy_(self.states[-1])
         self.dones[0].copy_(self.dones[-1])
@@ -98,7 +100,7 @@ class SourceStorage:
 
     def sample(self, batch_size):
         indices = np.random.randint(
-            low=0, high=self.states.shape[0] * self.num_envs,
+            low=0, high=self.num_envs * (self.rollout_length + 1),
             size=batch_size)
         states = self.states.view(-1, *self.img_shape)[indices]
         return states

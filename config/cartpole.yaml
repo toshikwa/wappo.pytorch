@@ -4,22 +4,19 @@ env:
 
 ppo:
   num_steps: 1000000
-  ppo_batch_size: 128
-  unroll_length: 16
-  ppo_lr: 5.e-4
+  lr_ppo: 5.e-4
   gamma: 0.999
-  ppo_clip_param: 0.2
-  num_gradient_steps: 3
-  value_loss_coef: 0.5
-  entropy_coef: 0.01
+  rollout_length: 256
+  num_minibatches: 8
+  epochs_ppo: 3
+  clip_range_ppo: 0.2
+  value_coef: 0.5
+  ent_coef: 0.01
   lambd: 0.95
   max_grad_norm: 0.5
-  use_deep: True
+  use_impala: True
 
 wappo:
-  adv_batch_size: 64
-  adv_lr: 5.e-5
-  num_critic: 5
-  use_gp: False
-  lambda_gp: 10.0
-  weight_clip_param: 0.01
+  lr_adv: 5.e-4
+  epochs_critic: 5
+  clip_range_adv: 0.01
