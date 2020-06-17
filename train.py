@@ -44,7 +44,7 @@ def main(args):
         with open(os.path.join(log_dir, 'config.yaml'), 'w') as f:
             f.write(yaml.dump(config))
 
-        # Agent.
+        # Run agent.
         if args.wappo:
             agent = WAPPOAgent(
                 source_venv=source_venv, target_venv=target_venv,

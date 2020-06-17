@@ -34,8 +34,9 @@ class PPOAgent(BaseAgent):
         loss_values = []
 
         for samples in self.source_storage.iter(self.batch_size):
-            self.update_steps += 1
             loss_policy, loss_value = self.update_ppo(*samples)
+
+            self.update_steps += 1
             loss_policies.append(loss_policy)
             loss_values.append(loss_value)
 
@@ -69,8 +70,10 @@ class PPOAgent(BaseAgent):
         # >>> Policy >>> #
 
         # >>> Total >>> #
-        loss = loss_policy - \
-            self.coef_ent * mean_entropy + self.coef_value * loss_value
+        loss = \
+            loss_policy \
+            - self.coef_ent * mean_entropy \
+            + self.coef_value * loss_value
         # >>> Total >>> #
 
         self.optim_ppo.zero_grad()

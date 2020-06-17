@@ -1,6 +1,5 @@
 env:
   num_envs: 64
-  num_levels: 1
 
 ppo:
   num_steps: 1000000
@@ -19,5 +18,5 @@ ppo:
 wappo:
   lr_critic: 5.e-4
   epochs_critic: 5
+  clip_range_wgan: 0.01
   coef_conf: 10.0
-  clip_range_adv: 0.01

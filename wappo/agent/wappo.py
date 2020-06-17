@@ -16,7 +16,7 @@ class WAPPOAgent(PPOAgent):
                  clip_range_ppo=0.2, coef_value=0.5, coef_ent=0.01,
                  lambd=0.95, max_grad_norm=0.5, use_impala=True,
                  lr_critic=1e-4, epochs_critic=5, coef_conf=10.0,
-                 clip_range_adv=0.01):
+                 clip_range_wgan=0.01):
         super().__init__(
             source_venv, target_venv, log_dir, device, num_steps, lr_ppo,
             gamma, rollout_length, num_minibatches, epochs_ppo, clip_range_ppo,
@@ -32,7 +32,7 @@ class WAPPOAgent(PPOAgent):
 
         self.epochs_critic = epochs_critic
         self.coef_conf = coef_conf
-        self.clip_range_adv = clip_range_adv
+        self.clip_range_wgan = clip_range_wgan
 
     def update(self):
         loss_policies = []
@@ -41,22 +41,17 @@ class WAPPOAgent(PPOAgent):
         loss_confs = []
 
         for samples in self.source_storage.iter(self.batch_size):
-            self.update_steps += 1
             target_states = self.target_storage.sample(self.batch_size)
 
-            # If update using confusion loss every 5 updates.
-            update_conf = self.update_steps % self.epochs_critic == 0
-
-            # Update PPO network.
             loss_policy, loss_value, loss_conf = \
-                self.update_ppo(*samples, target_states, update_conf)
+                self.update_ppo(*samples, target_states)
+            loss_critic = self.update_critic(samples[0], target_states)
+
+            self.update_steps += 1
             loss_policies.append(loss_policy)
             loss_values.append(loss_value)
-            if update_conf:
-                loss_confs.append(loss_conf)
-
-            # Update Critic network.
-            loss_critics.append(self.update_critic(samples[0], target_states))
+            loss_confs.append(loss_conf)
+            loss_critics.append(loss_critic)
 
         self.writer.add_scalar(
             'loss/policy', np.mean(loss_policies), self.steps)
@@ -68,8 +63,10 @@ class WAPPOAgent(PPOAgent):
             'loss/conf', np.mean(loss_confs), self.steps)
 
     def update_ppo(self, states, actions, values_old, value_targets,
-                   log_probs_old, advantages, target_states,
-                   update_conf=False):
+                   log_probs_old, advantages, target_states):
+        # Include confusion loss every 5 updates.
+        if_update_conf = float(self.update_steps % self.epochs_critic == 0)
+
         values, log_probs, mean_entropy, source_features = \
             self.ppo_network.evaluate_actions(states, actions)
 
@@ -93,18 +90,18 @@ class WAPPOAgent(PPOAgent):
         # >>> Policy >>> #
 
         # >>> Confusion >>> #
-        if update_conf:
-            target_features = self.ppo_network.body_net(target_states)
-            source_preds = self.adv_network(source_features)
-            target_preds = self.adv_network(target_features)
-            loss_conf = torch.mean(source_preds) - torch.mean(target_preds)
-        else:
-            loss_conf = torch.tensor(0.0)
+        target_features = self.ppo_network.body_net(target_states)
+        source_preds = self.adv_network(source_features)
+        target_preds = self.adv_network(target_features)
+        loss_conf = torch.mean(source_preds) - torch.mean(target_preds)
         # >>> Confusion >>> #
 
         # >>> Total >>> #
-        loss = loss_policy - self.coef_ent * mean_entropy + \
-            self.coef_value * loss_value + self.coef_conf * loss_conf
+        loss = \
+            loss_policy \
+            - self.coef_ent * mean_entropy \
+            + self.coef_value * loss_value \
+            + if_update_conf * self.coef_conf * loss_conf
         # >>> Total >>> #
 
         self.optim_ppo.zero_grad()
@@ -131,7 +128,7 @@ class WAPPOAgent(PPOAgent):
         self.optim_critic.step()
 
         for p in self.adv_network.parameters():
-            p.data.clamp_(-self.clip_range_adv, self.clip_range_adv)
+            p.data.clamp_(-self.clip_range_wgan, self.clip_range_wgan)
 
         return loss_critic.detach().item()
 

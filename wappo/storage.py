@@ -26,10 +26,10 @@ class SourceStorage:
         # Predictions of V(s_t) based on the current value function.
         self.values = torch.empty(
             rollout_length + 1, num_envs, 1, device=device)
-        # Target estimate of V(s_t) based on rollouts.
+        # Target estimates of V(s_t) based on rollouts.
         self.value_targets = torch.empty(
             rollout_length, num_envs, 1, device=device)
-
+        # Estimated advantages.
         self.advantages = torch.empty(
             rollout_length, num_envs, 1, device=device)
 
@@ -97,12 +97,6 @@ class SourceStorage:
         self.states[0].copy_(self.states[-1])
         self.dones[0].copy_(self.dones[-1])
         self._is_ready = False
-
-    def sample(self, batch_size):
-        indices = np.random.randint(
-            low=0, high=self.total_batches, size=batch_size)
-        states = self.states.view(-1, *self.img_shape)[indices]
-        return states
 
 
 class TargetStorage:
