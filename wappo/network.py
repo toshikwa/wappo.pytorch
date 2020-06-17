@@ -1,5 +1,12 @@
+from functools import partial
 import torch
 from torch import nn
+
+
+def init_fn(m, gain=1):
+    if isinstance(m, nn.Linear) or isinstance(m, nn.Conv2d):
+        nn.init.orthogonal_(m.weight.data, gain=gain)
+        nn.init.constant_(m.bias.data, 0)
 
 
 class Flatten(nn.Module):
@@ -71,7 +78,8 @@ class CriticNetwork(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(512, 512),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(512, 1))
+            nn.Linear(512, 1)).apply(partial(
+                init_fn, gain=nn.init.calculate_gain('leaky_relu', 0.2)))
 
     def forward(self, features):
         return self.net(features)
@@ -162,7 +170,8 @@ class Categorical(nn.Module):
 
     def __init__(self, feature_dim, action_dim):
         super().__init__()
-        self.linear = nn.Linear(feature_dim, action_dim)
+        self.linear = nn.Linear(feature_dim, action_dim).apply(
+            partial(init_fn, gain=0.01))
 
     def forward(self, features):
         return FixedCategorical(logits=self.linear(features))
