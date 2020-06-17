@@ -35,7 +35,7 @@ class PPOAgent(BaseAgent):
 
         for samples in self.source_storage.iter(self.batch_size):
             self.update_steps += 1
-            loss_policy, loss_value = self.update_ppo(samples)
+            loss_policy, loss_value = self.update_ppo(*samples)
             loss_policies.append(loss_policy)
             loss_values.append(loss_value)
 
@@ -44,10 +44,9 @@ class PPOAgent(BaseAgent):
         self.writer.add_scalar(
             'loss/value', np.mean(loss_values), self.steps)
 
-    def update_ppo(self, samples):
-        states, actions, values_old, \
-            value_targets, log_probs_old, advantages = samples
-        values, log_probs, mean_entropy = \
+    def update_ppo(self, states, actions, values_old, value_targets,
+                   log_probs_old, advantages):
+        values, log_probs, mean_entropy, _ = \
             self.ppo_network.evaluate_actions(states, actions)
 
         # >>> Value >>> #

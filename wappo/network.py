@@ -45,7 +45,7 @@ class PPONetwork(nn.Module):
 
         log_probs = action_dists.log_probs(actions)
         mean_entropy = action_dists.entropy().mean()
-        return values, log_probs, mean_entropy
+        return values, log_probs, mean_entropy, features
 
 
 class AdversarialNetwork(nn.Module):
