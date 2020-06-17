@@ -29,11 +29,11 @@ def main(args):
             'cuda' if args.cuda and torch.cuda.is_available() else 'cpu')
 
         # Make environments.
-        source_venv = make_venv(
+        venv_source = make_venv(
             env_id=args.env_id,
             num_envs=config['env']['num_envs'],
             num_levels=source_levels[args.trial])
-        target_venv = make_venv(
+        venv_target = make_venv(
             env_id=args.env_id,
             num_envs=config['env']['num_envs'],
             num_levels=target_levels[args.trial])
@@ -53,12 +53,12 @@ def main(args):
         # Run agent.
         if args.wappo:
             agent = WAPPOAgent(
-                source_venv=source_venv, target_venv=target_venv,
+                venv_source=venv_source, venv_target=venv_target,
                 device=device, log_dir=log_dir,
                 **config['ppo'], **config['wappo'])
         else:
             agent = PPOAgent(
-                source_venv=source_venv, target_venv=target_venv,
+                venv_source=venv_source, venv_target=venv_target,
                 device=device, log_dir=log_dir, **config['ppo'])
 
         agent.run()
@@ -66,7 +66,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='config/wappo.yaml')
+    parser.add_argument('--config', type=str, default='config/cartpole.yaml')
     parser.add_argument('--env_id', type=str, default='cartpole-visual-v1')
     parser.add_argument('--log_dir', default='logs')
     parser.add_argument('--trial', type=int, default=0)

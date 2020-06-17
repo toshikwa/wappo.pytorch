@@ -10,30 +10,30 @@ from wappo.network import PPONetwork
 
 class PPOAgent(BaseAgent):
 
-    def __init__(self, source_venv, target_venv, log_dir, device,
+    def __init__(self, venv_source, venv_target, log_dir, device,
                  num_steps=10**6, lr_ppo=5e-4, gamma=0.999,
                  rollout_length=16, num_minibatches=8, epochs_ppo=3,
                  clip_range_ppo=0.2, coef_value=0.5, coef_ent=0.01,
                  lambd=0.95, max_grad_norm=0.5, use_impala=True):
         super().__init__(
-            source_venv, target_venv, log_dir, device, num_steps, gamma,
+            venv_source, venv_target, log_dir, device, num_steps, gamma,
             rollout_length, num_minibatches, epochs_ppo, clip_range_ppo,
             coef_value, coef_ent, lambd, max_grad_norm)
 
         # PPO network.
-        self.ppo_network = PPONetwork(
-            self.source_venv.observation_space.shape,
-            self.source_venv.action_space.n,
+        self.network_ppo = PPONetwork(
+            self.venv_source.observation_space.shape,
+            self.venv_source.action_space.n,
             use_impala=use_impala).to(device)
 
         # Optimizer.
-        self.optim_ppo = RMSprop(self.ppo_network.parameters(), lr=lr_ppo)
+        self.optim_ppo = RMSprop(self.network_ppo.parameters(), lr=lr_ppo)
 
     def update(self):
         loss_policies = []
         loss_values = []
 
-        for samples in self.source_storage.iter(self.batch_size):
+        for samples in self.storage_source.iter(self.batch_size):
             loss_policy, loss_value = self.update_ppo(*samples)
 
             self.update_steps += 1
@@ -48,7 +48,7 @@ class PPOAgent(BaseAgent):
     def update_ppo(self, states, actions, values_old, value_targets,
                    log_probs_old, advantages):
         values, log_probs, mean_entropy, _ = \
-            self.ppo_network.evaluate_actions(states, actions)
+            self.network_ppo.evaluate_actions(states, actions)
 
         # >>> Value >>> #
         values_clipped = values_old + (values - values_old).clamp(
@@ -78,7 +78,7 @@ class PPOAgent(BaseAgent):
 
         self.optim_ppo.zero_grad()
         loss.backward()
-        clip_grad_norm_(self.ppo_network.parameters(), self.max_grad_norm)
+        clip_grad_norm_(self.network_ppo.parameters(), self.max_grad_norm)
         self.optim_ppo.step()
 
         return loss_policy.detach().item(), loss_value.detach().item()
@@ -86,10 +86,10 @@ class PPOAgent(BaseAgent):
     def save_models(self, save_dir):
         super().save_models(save_dir)
         torch.save(
-            self.ppo_network.state_dict(),
-            os.path.join(save_dir, 'ppo_network.pth'))
+            self.network_ppo.state_dict(),
+            os.path.join(save_dir, 'network_ppo.pth'))
 
     def load_models(self, save_dir):
         super().load_models(save_dir)
-        self.ppo_network.load_state_dict(
-            torch.load(os.path.join(save_dir, 'ppo_network.pth')))
+        self.network_ppo.load_state_dict(
+            torch.load(os.path.join(save_dir, 'network_ppo.pth')))

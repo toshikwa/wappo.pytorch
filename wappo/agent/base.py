@@ -10,32 +10,32 @@ from wappo.storage import SourceStorage, TargetStorage
 
 class BaseAgent(ABC):
 
-    def __init__(self, source_venv, target_venv, log_dir, device,
+    def __init__(self, venv_source, venv_target, log_dir, device,
                  num_steps=10**6, gamma=0.999, rollout_length=128,
                  num_minibatches=8, epochs_ppo=3, clip_range_ppo=0.2,
                  coef_value=0.5, coef_ent=0.01, lambd=0.95,
                  max_grad_norm=0.5):
         super().__init__()
 
-        self.source_venv = source_venv
-        self.target_venv = target_venv
+        self.venv_source = venv_source
+        self.venv_target = venv_target
         self.device = device
 
         # Storage.
-        self.source_storage = SourceStorage(
-            source_venv.num_envs, rollout_length, epochs_ppo,
-            source_venv.observation_space.shape, gamma, lambd, device)
-        self.target_storage = TargetStorage(
-            target_venv.num_envs, rollout_length,
-            target_venv.observation_space.shape, device)
+        self.storage_source = SourceStorage(
+            venv_source.num_envs, rollout_length, epochs_ppo,
+            venv_source.observation_space.shape, gamma, lambd, device)
+        self.storage_target = TargetStorage(
+            venv_target.num_envs, rollout_length,
+            venv_target.observation_space.shape, device)
 
         # Reset envs and store initial states.
-        self.states = torch.tensor(
-            self.source_venv.reset(), dtype=torch.uint8, device=self.device)
-        self.target_states = torch.tensor(
-            self.target_venv.reset(), dtype=torch.uint8, device=self.device)
-        self.source_storage.init_states(self.states)
-        self.target_storage.init_states(self.target_states)
+        self.states_source = torch.tensor(
+            self.venv_source.reset(), dtype=torch.uint8, device=self.device)
+        self.states_target = torch.tensor(
+            self.venv_target.reset(), dtype=torch.uint8, device=self.device)
+        self.storage_source.init_states(self.states_source)
+        self.storage_target.init_states(self.states_target)
 
         # For logging.
         self.model_dir = os.path.join(log_dir, 'model')
@@ -52,7 +52,7 @@ class BaseAgent(ABC):
         self.target_return = deque([0.0], maxlen=100)
 
         # Batch size.
-        total_batches = rollout_length * source_venv.num_envs
+        total_batches = rollout_length * venv_source.num_envs
         self.batch_size = total_batches // num_minibatches
         # Unroll length.
         self.rollout_length = rollout_length
@@ -60,7 +60,7 @@ class BaseAgent(ABC):
         self.num_updates = num_steps // total_batches
 
         # Hyperparameters.
-        self.num_envs = source_venv.num_envs
+        self.num_envs = venv_source.num_envs
         self.gamma = gamma
         self.num_minibatches = num_minibatches
         self.epochs_ppo = epochs_ppo
@@ -71,9 +71,9 @@ class BaseAgent(ABC):
 
     def run(self):
         self.writer.add_image(
-            'image/source_env', self.states[0], self.steps)
+            'image/source_env', self.states_source[0], self.steps)
         self.writer.add_image(
-            'image/target_env', self.target_states[0], self.steps)
+            'image/target_env', self.states_target[0], self.steps)
 
         for step in range(self.num_updates):
             self.run_source()
@@ -97,41 +97,42 @@ class BaseAgent(ABC):
 
         for _ in range(self.rollout_length):
             with torch.no_grad():
-                values, actions, log_probs = self.ppo_network(self.states)
+                values, actions, log_probs = \
+                    self.network_ppo(self.states_source)
             next_states, rewards, dones, infos = \
-                self.source_venv.step(actions.cpu().numpy().flatten())
+                self.venv_source.step(actions.cpu().numpy().flatten())
 
             for info in infos:
                 if 'episode' in info.keys():
                     self.source_return.append(info['episode']['r'])
 
-            self.states = torch.tensor(
+            self.states_source = torch.tensor(
                 next_states, dtype=torch.uint8, device=self.device)
 
-            self.source_storage.insert(
-                self.states, actions, rewards, dones, log_probs, values)
+            self.storage_source.insert(
+                self.states_source, actions, rewards, dones, log_probs, values)
 
         with torch.no_grad():
-            next_values = self.ppo_network.calculate_values(self.states)
+            next_values = self.network_ppo.calculate_values(self.states_source)
 
-        self.source_storage.end_rollout(next_values)
+        self.storage_source.end_rollout(next_values)
 
     def run_target(self):
         for _ in range(self.rollout_length):
             with torch.no_grad():
-                _, actions, _ = self.ppo_network(self.target_states)
+                _, actions, _ = self.network_ppo(self.states_target)
 
             next_states, _, _, infos = \
-                self.target_venv.step(actions.cpu().numpy().flatten())
+                self.venv_target.step(actions.cpu().numpy().flatten())
 
             for info in infos:
                 if 'episode' in info.keys():
                     self.target_return.append(info['episode']['r'])
 
-            self.target_states = torch.tensor(
+            self.states_target = torch.tensor(
                 next_states, dtype=torch.uint8, device=self.device)
 
-            self.target_storage.insert(self.target_states)
+            self.storage_target.insert(self.states_target)
 
     @abstractmethod
     def update(self):
