@@ -1,6 +1,8 @@
 import os
+import numpy as np
 import torch
 from torch.optim import RMSprop
+from torch.nn.utils import clip_grad_norm_
 
 from .base import BaseAgent
 from wappo.network import PPONetwork
@@ -9,13 +11,13 @@ from wappo.network import PPONetwork
 class PPOAgent(BaseAgent):
 
     def __init__(self, source_venv, target_venv, log_dir, device,
-                 num_steps=10**6, memory_size=10**4, lr_ppo=5e-4, gamma=0.999,
+                 num_steps=10**6, lr_ppo=5e-4, gamma=0.999,
                  rollout_length=16, num_minibatches=8, epochs_ppo=3,
                  clip_range_ppo=0.2, value_coef=0.5, ent_coef=0.01,
                  lambd=0.95, max_grad_norm=0.5, use_impala=True):
         super().__init__(
-            source_venv, target_venv, log_dir, device, num_steps, memory_size,
-            gamma, rollout_length, num_minibatches, epochs_ppo, clip_range_ppo,
+            source_venv, target_venv, log_dir, device, num_steps, gamma,
+            rollout_length, num_minibatches, epochs_ppo, clip_range_ppo,
             value_coef, ent_coef, lambd, max_grad_norm)
 
         # PPO network.
@@ -28,22 +30,18 @@ class PPOAgent(BaseAgent):
         self.optim_ppo = RMSprop(self.ppo_network.parameters(), lr=lr_ppo)
 
     def update(self):
-        mean_loss_policy = 0.0
-        mean_loss_value = 0.0
-        num_iters = 0
+        loss_policies = []
+        loss_values = []
 
-        for samples in self.source_storage.iter(self.batch_size):
+        for samples in self.source_storage.iter(self.batch_size_ppo):
             loss_policy, loss_value = self.update_ppo(samples)
+            loss_policies.append(loss_policy)
+            loss_values.append(loss_value)
 
-            mean_loss_policy += loss_policy
-            mean_loss_value = loss_value
-            num_iters += 1
-
-        mean_loss_policy /= num_iters
-        mean_loss_value /= num_iters
-
-        self.writer.add_scalar('loss/policy', mean_loss_policy, self.steps)
-        self.writer.add_scalar('loss/value', mean_loss_value, self.steps)
+        self.writer.add_scalar(
+            'loss/policy', np.mean(loss_policies), self.steps)
+        self.writer.add_scalar(
+            'loss/value', np.mean(loss_values), self.steps)
 
     def update_ppo(self, samples):
         states, actions, values_old, \
@@ -77,8 +75,7 @@ class PPOAgent(BaseAgent):
 
         self.optim_ppo.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(
-            self.ppo_network.parameters(), self.max_grad_norm)
+        clip_grad_norm_(self.ppo_network.parameters(), self.max_grad_norm)
         self.optim_ppo.step()
 
         return loss_policy.detach().item(), loss_value.detach().item()

@@ -11,10 +11,10 @@ from wappo.storage import SourceStorage, TargetStorage
 class BaseAgent(ABC):
 
     def __init__(self, source_venv, target_venv, log_dir, device,
-                 num_steps=10**6, memory_size=10**4, gamma=0.999,
-                 rollout_length=128, num_minibatches=8, epochs_ppo=3,
-                 clip_range_ppo=0.2, value_coef=0.5, ent_coef=0.01,
-                 lambd=0.95, max_grad_norm=0.5):
+                 num_steps=10**6, gamma=0.999, rollout_length=128,
+                 num_minibatches=8, epochs_ppo=3, clip_range_ppo=0.2,
+                 value_coef=0.5, ent_coef=0.01, lambd=0.95,
+                 max_grad_norm=0.5):
         super().__init__()
 
         self.source_venv = source_venv
@@ -26,8 +26,8 @@ class BaseAgent(ABC):
             source_venv.num_envs, rollout_length, epochs_ppo,
             source_venv.observation_space.shape, gamma, lambd, device)
         self.target_storage = TargetStorage(
-            memory_size, target_venv.num_envs,
-            target_venv.observation_space.shape, torch.device('cpu'))
+            target_venv.num_envs, rollout_length,
+            target_venv.observation_space.shape, device)
 
         # Reset envs and store initial states.
         self.states = torch.tensor(
@@ -35,7 +35,7 @@ class BaseAgent(ABC):
         self.target_states = torch.tensor(
             self.target_venv.reset(), dtype=torch.uint8, device=self.device)
         self.source_storage.init_states(self.states)
-        self.target_storage.insert(self.target_states)
+        self.target_storage.init_states(self.target_states)
 
         # For logging.
         self.model_dir = os.path.join(log_dir, 'model')
@@ -47,12 +47,12 @@ class BaseAgent(ABC):
 
         self.steps = 0
         self.writer = SummaryWriter(log_dir=summary_dir)
-        self.source_return = deque([0.0], maxlen=source_venv.num_envs)
-        self.target_return = deque([0.0], maxlen=target_venv.num_envs)
+        self.source_return = deque([0.0], maxlen=100)
+        self.target_return = deque([0.0], maxlen=100)
 
         # Batch size.
         total_batches = rollout_length * source_venv.num_envs
-        self.batch_size = total_batches // num_minibatches
+        self.batch_size_ppo = total_batches // num_minibatches
         # Unroll length.
         self.rollout_length = rollout_length
         # Number of staps to update.
@@ -61,6 +61,8 @@ class BaseAgent(ABC):
         # Hyperparameters.
         self.num_envs = source_venv.num_envs
         self.gamma = gamma
+        self.num_minibatches = num_minibatches
+        self.epochs_ppo = epochs_ppo
         self.clip_range_ppo = clip_range_ppo
         self.value_coef = value_coef
         self.ent_coef = ent_coef

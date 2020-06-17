@@ -6,28 +6,31 @@ from .utils import normalize
 
 class SourceStorage:
 
-    def __init__(self, num_envs, rollout_length, ppo_epochs, img_shape,
+    def __init__(self, num_envs, rollout_length, epochs_ppo, img_shape,
                  gamma, lambd, device):
 
         # Transitions.
-        self.states = torch.zeros(
+        self.states = torch.empty(
             rollout_length + 1, num_envs, *img_shape, device=device,
             dtype=torch.uint8)
-        self.rewards = torch.zeros(
+        self.rewards = torch.empty(
             rollout_length, num_envs, 1, device=device)
-        self.actions = torch.zeros(
+        self.actions = torch.empty(
             rollout_length, num_envs, 1, device=device, dtype=torch.long)
-        self.dones = torch.ones(
+        self.dones = torch.empty(
             rollout_length + 1, num_envs, 1, device=device)
 
         # Log of action probabilities based on the current policy.
-        self.log_probs = torch.zeros(
+        self.log_probs = torch.empty(
             rollout_length, num_envs, 1, device=device)
         # Predictions of V(s_t) based on the current value function.
-        self.values = torch.zeros(
+        self.values = torch.empty(
             rollout_length + 1, num_envs, 1, device=device)
         # Target estimate of V(s_t) based on rollouts.
-        self.value_targets = torch.zeros(
+        self.value_targets = torch.empty(
+            rollout_length, num_envs, 1, device=device)
+
+        self.advantages = torch.empty(
             rollout_length, num_envs, 1, device=device)
 
         self.step = 0
@@ -35,7 +38,7 @@ class SourceStorage:
 
         self.num_envs = num_envs
         self.rollout_length = rollout_length
-        self.ppo_epochs = ppo_epochs
+        self.epochs_ppo = epochs_ppo
         self.img_shape = img_shape
         self.gamma = gamma
         self.lambd = lambd
@@ -43,6 +46,7 @@ class SourceStorage:
 
     def init_states(self, states):
         self.states[0].copy_(states)
+        self.dones[0].fill_(0)
 
     def insert(self, next_states, actions, rewards, dones, log_probs,
                values):
@@ -60,26 +64,22 @@ class SourceStorage:
         self._is_ready = True
 
         self.values[-1].copy_(next_value)
-        adv = 0
+        advantage = 0
         for step in reversed(range(self.rollout_length)):
             td_error = self.rewards[step] + \
                 self.gamma * self.values[step+1] * (1 - self.dones[step])\
                 - self.values[step]
-            adv = td_error + \
-                self.gamma * self.lambd * (1 - self.dones[step]) * adv
-            self.value_targets[step] = adv + self.values[step]
+            advantage = td_error + \
+                self.gamma * self.lambd * (1 - self.dones[step]) * advantage
+            self.value_targets[step].copy_(advantage + self.values[step])
+
+        self.advantages.copy_(normalize(self.value_targets - self.values[:-1]))
 
     def iter(self, batch_size):
         assert self._is_ready
 
-        # Calculate advantages.
-        all_advantages = self.value_targets - self.values[:-1]
-        all_advantages = normalize(all_advantages)
-
-        # Indices of samples.
-        indices = np.arange(self.total_batches)
-
-        for _ in range(self.ppo_epochs):
+        for _ in range(self.epochs_ppo):
+            indices = np.arange(self.total_batches)
             np.random.shuffle(indices)
 
             for start in range(0, self.total_batches, batch_size):
@@ -89,7 +89,7 @@ class SourceStorage:
                 values = self.values[:-1].view(-1, 1)[idxes]
                 value_targets = self.value_targets.view(-1, 1)[idxes]
                 log_probs = self.log_probs.view(-1, 1)[idxes]
-                advantages = all_advantages.view(-1, 1)[idxes]
+                advantages = self.advantages.view(-1, 1)[idxes]
 
                 yield states, actions, values, value_targets, \
                     log_probs, advantages
@@ -100,33 +100,35 @@ class SourceStorage:
 
     def sample(self, batch_size):
         indices = np.random.randint(
-            low=0, high=self.num_envs * (self.rollout_length + 1),
-            size=batch_size)
+            low=0, high=self.total_batches, size=batch_size)
         states = self.states.view(-1, *self.img_shape)[indices]
         return states
 
 
 class TargetStorage:
 
-    def __init__(self, memory_size, num_envs, img_shape, device):
+    def __init__(self, num_envs, rollout_length, img_shape, device):
 
         self.states = torch.empty(
-            memory_size, num_envs, *img_shape, device=device,
+            rollout_length + 1, num_envs, *img_shape, device=device,
             dtype=torch.uint8)
 
-        self._p = 0
-        self._n = 0
-        self.memory_size = memory_size
+        self.step = 0
+        self.total_batches = num_envs * (rollout_length + 1)
+
         self.num_envs = num_envs
+        self.rollout_length = rollout_length
         self.img_shape = img_shape
 
-    def insert(self, states):
-        self.states[self._p].copy_(states)
-        self._p = (self._p + 1) % self.memory_size
-        self._n = min(self._n + 1, self.memory_size)
+    def init_states(self, states):
+        self.states[0].copy_(states)
 
-    def sample(self, batch_size, device):
+    def insert(self, next_states):
+        self.states[self.step + 1].copy_(next_states)
+        self.step = (self.step + 1) % self.rollout_length
+
+    def sample(self, batch_size):
         indices = np.random.randint(
-            low=0, high=self._n * self.num_envs, size=batch_size)
-        states = self.states[:self._n].view(-1, *self.img_shape)[indices]
-        return states.to(device)
+            low=0, high=self.total_batches, size=batch_size)
+        states = self.states.view(-1, *self.img_shape)[indices]
+        return states

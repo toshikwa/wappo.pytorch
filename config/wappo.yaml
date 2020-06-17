@@ -17,6 +17,8 @@ ppo:
   use_impala: True
 
 wappo:
-  lr_adv: 5.e-4
+  lr_critic: 5.e-5
+  lr_conf: 5.e-5
+  batch_size_adv: 1024
   epochs_critic: 5
   clip_range_adv: 0.01

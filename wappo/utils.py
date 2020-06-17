@@ -27,5 +27,29 @@ def tile_images_torch(nchw):
 
 def normalize(tensor):
     mean = tensor.mean()
-    std = tensor.std() + 1.e-5
-    return (tensor - mean) / std
+    std = tensor.std()
+    return tensor.add_(-mean).div_(std + 1.e-8)
+
+
+class LRAnneaer:
+
+    def __init__(self, optim, start_value, end_value, num_steps):
+        assert num_steps > 0 and isinstance(num_steps, int)
+
+        self.steps = 0
+        self.optim = optim
+        self.start_value = start_value
+        self.end_value = end_value
+        self.num_steps = num_steps
+
+        self.a = (self.end_value - self.start_value) / self.num_steps
+        self.b = self.start_value
+
+    def step(self):
+        self.steps = min(self.num_steps, self.steps + 1)
+        for param_group in self.optim.param_groups:
+            param_group['lr'] = self.get()
+
+    def get(self):
+        assert 0 < self.steps <= self.num_steps
+        return self.a * self.steps + self.b

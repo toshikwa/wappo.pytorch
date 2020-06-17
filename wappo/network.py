@@ -101,7 +101,7 @@ class NatureCNNBody(nn.Module):
 
     def forward(self, states):
         assert states.dtype == torch.uint8
-        states = states.float() / 255.0
+        states = states.float().div_(255.0)
         return self.net(states)
 
 
@@ -146,7 +146,7 @@ class ImpalaCNNBody(nn.Module):
 
     def forward(self, states):
         assert states.dtype == torch.uint8
-        states = states.float() / 255.0
+        states = states.float().div_(255.0)
         return self.net(states)
 
 

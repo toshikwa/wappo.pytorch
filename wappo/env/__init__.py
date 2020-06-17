@@ -1,2 +1,2 @@
 from .cartpole import CartPoleVisualEnv
-from .env import make_cartpole
+from .env import make_venv

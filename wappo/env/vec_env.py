@@ -101,3 +101,27 @@ class VecEnvWrapper(VecEnv):
 
     def __getattr__(self, name):
         return getattr(self.venv, name)
+
+
+class VecEnvObservationWrapper(VecEnvWrapper):
+    @abstractmethod
+    def process(self, obs):
+        pass
+
+    def reset(self):
+        obs = self.venv.reset()
+        return self.process(obs)
+
+    def step_wait(self):
+        obs, rews, dones, infos = self.venv.step_wait()
+        return self.process(obs), rews, dones, infos
+
+
+class VecExtractDictObs(VecEnvObservationWrapper):
+    def __init__(self, venv, key):
+        self.key = key
+        super().__init__(venv=venv,
+            observation_space=venv.observation_space.spaces[self.key])
+
+    def process(self, obs):
+        return obs[self.key]
