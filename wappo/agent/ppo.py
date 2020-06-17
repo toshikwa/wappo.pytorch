@@ -13,12 +13,12 @@ class PPOAgent(BaseAgent):
     def __init__(self, source_venv, target_venv, log_dir, device,
                  num_steps=10**6, lr_ppo=5e-4, gamma=0.999,
                  rollout_length=16, num_minibatches=8, epochs_ppo=3,
-                 clip_range_ppo=0.2, value_coef=0.5, ent_coef=0.01,
+                 clip_range_ppo=0.2, coef_value=0.5, coef_ent=0.01,
                  lambd=0.95, max_grad_norm=0.5, use_impala=True):
         super().__init__(
             source_venv, target_venv, log_dir, device, num_steps, gamma,
             rollout_length, num_minibatches, epochs_ppo, clip_range_ppo,
-            value_coef, ent_coef, lambd, max_grad_norm)
+            coef_value, coef_ent, lambd, max_grad_norm)
 
         # PPO network.
         self.ppo_network = PPONetwork(
@@ -33,7 +33,8 @@ class PPOAgent(BaseAgent):
         loss_policies = []
         loss_values = []
 
-        for samples in self.source_storage.iter(self.batch_size_ppo):
+        for samples in self.source_storage.iter(self.batch_size):
+            self.update_steps += 1
             loss_policy, loss_value = self.update_ppo(samples)
             loss_policies.append(loss_policy)
             loss_values.append(loss_value)
@@ -70,7 +71,7 @@ class PPOAgent(BaseAgent):
 
         # >>> Total >>> #
         loss = loss_policy - \
-            self.ent_coef * mean_entropy + self.value_coef * loss_value
+            self.coef_ent * mean_entropy + self.coef_value * loss_value
         # >>> Total >>> #
 
         self.optim_ppo.zero_grad()

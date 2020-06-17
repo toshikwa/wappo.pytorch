@@ -10,15 +10,15 @@ ppo:
   num_minibatches: 8
   epochs_ppo: 3
   clip_range_ppo: 0.2
-  value_coef: 0.5
-  ent_coef: 0.01
+  coef_value: 0.5
+  coef_ent: 0.01
   lambd: 0.95
   max_grad_norm: 0.5
   use_impala: True
 
 wappo:
-  lr_critic: 5.e-5
-  lr_conf: 5.e-5
-  batch_size_adv: 1024
+  lr_critic: 5.e-4
+  lr_conf: 5.e-4
   epochs_critic: 5
+  coef_conf: 10.0
   clip_range_adv: 0.01

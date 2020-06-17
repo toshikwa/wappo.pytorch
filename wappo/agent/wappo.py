@@ -13,14 +13,14 @@ class WAPPOAgent(PPOAgent):
     def __init__(self, source_venv, target_venv, log_dir, device,
                  num_steps=10**6, lr_ppo=5e-4, gamma=0.999,
                  rollout_length=16, num_minibatches=8, epochs_ppo=3,
-                 clip_range_ppo=0.2, value_coef=0.5, ent_coef=0.01,
+                 clip_range_ppo=0.2, coef_value=0.5, coef_ent=0.01,
                  lambd=0.95, max_grad_norm=0.5, use_impala=True,
-                 lr_critic=1e-4, lr_conf=1e-4, batch_size_adv=512,
-                 epochs_critic=5, clip_range_adv=0.01):
+                 lr_critic=1e-4, lr_conf=1e-4, epochs_critic=5,
+                 coef_conf=10.0, clip_range_adv=0.01):
         super().__init__(
             source_venv, target_venv, log_dir, device, num_steps, lr_ppo,
             gamma, rollout_length, num_minibatches, epochs_ppo, clip_range_ppo,
-            value_coef, ent_coef, lambd, max_grad_norm, use_impala)
+            coef_value, coef_ent, lambd, max_grad_norm, use_impala)
 
         # Adversarial network.
         self.adv_network = AdversarialNetwork(
@@ -32,8 +32,8 @@ class WAPPOAgent(PPOAgent):
         self.optim_conf = RMSprop(
             self.ppo_network.body_net.parameters(), lr=lr_conf)
 
-        self.batch_size_adv = batch_size_adv
         self.epochs_critic = epochs_critic
+        self.coef_conf = coef_conf
         self.clip_range_adv = clip_range_adv
 
     def update(self):
@@ -42,9 +42,12 @@ class WAPPOAgent(PPOAgent):
         loss_critics = []
         loss_confs = []
 
-        for samples in self.source_storage.iter(self.batch_size_ppo):
+        for samples in self.source_storage.iter(self.batch_size):
+            self.update_steps += 1
             loss_critics.append(self.update_critic())
-            loss_confs.append(self.update_conf())
+
+            if self.update_steps % self.epochs_critic == 0:
+                loss_confs.append(self.update_conf())
 
             loss_policy, loss_value = self.update_ppo(samples)
             loss_policies.append(loss_policy)
@@ -60,8 +63,8 @@ class WAPPOAgent(PPOAgent):
             'loss/conf', np.mean(loss_confs), self.steps)
 
     def update_conf(self):
-        source_states = self.source_storage.sample(self.batch_size_adv)
-        target_states = self.target_storage.sample(self.batch_size_adv)
+        source_states = self.source_storage.sample(self.batch_size)
+        target_states = self.target_storage.sample(self.batch_size)
 
         source_features = self.ppo_network.body_net(source_states)
         target_features = self.ppo_network.body_net(target_states)
@@ -69,7 +72,8 @@ class WAPPOAgent(PPOAgent):
         source_preds = self.adv_network(source_features)
         target_preds = self.adv_network(target_features)
 
-        loss_conf = -torch.mean(source_preds) + torch.mean(target_preds)
+        loss_conf = self.coef_conf * (
+            torch.mean(source_preds) - torch.mean(target_preds))
 
         self.optim_conf.zero_grad()
         loss_conf.backward()
@@ -79,32 +83,27 @@ class WAPPOAgent(PPOAgent):
         return loss_conf.detach().item()
 
     def update_critic(self):
-        loss_critics = []
+        source_states = self.source_storage.sample(self.batch_size)
+        target_states = self.target_storage.sample(self.batch_size)
 
-        for _ in range(self.epochs_critic):
-            source_states = self.source_storage.sample(self.batch_size_adv)
-            target_states = self.target_storage.sample(self.batch_size_adv)
+        with torch.no_grad():
+            source_features = self.ppo_network.body_net(source_states)
+            target_features = self.ppo_network.body_net(target_states)
 
-            with torch.no_grad():
-                source_features = self.ppo_network.body_net(source_states)
-                target_features = self.ppo_network.body_net(target_states)
+        source_preds = self.adv_network(source_features)
+        target_preds = self.adv_network(target_features)
 
-            source_preds = self.adv_network(source_features)
-            target_preds = self.adv_network(target_features)
+        loss_critic = - torch.mean(source_preds) + torch.mean(target_preds)
 
-            loss_critic = torch.mean(source_preds) - torch.mean(target_preds)
+        self.optim_critic.zero_grad()
+        loss_critic.backward()
+        clip_grad_norm_(self.adv_network.parameters(), self.max_grad_norm)
+        self.optim_critic.step()
 
-            self.optim_critic.zero_grad()
-            loss_critic.backward()
-            clip_grad_norm_(self.adv_network.parameters(), self.max_grad_norm)
-            self.optim_critic.step()
+        for p in self.adv_network.parameters():
+            p.data.clamp_(-self.clip_range_adv, self.clip_range_adv)
 
-            for p in self.adv_network.parameters():
-                p.data.clamp_(-self.clip_range_adv, self.clip_range_adv)
-
-            loss_critics.append(loss_critic.detach().item())
-
-        return np.mean(loss_critics)
+        return loss_critic.detach().item()
 
     def calculate_gradient_penalty(self, source_features, target_features):
         # Random weight term for interpolation between real and fake samples.

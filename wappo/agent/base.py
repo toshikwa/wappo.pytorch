@@ -13,7 +13,7 @@ class BaseAgent(ABC):
     def __init__(self, source_venv, target_venv, log_dir, device,
                  num_steps=10**6, gamma=0.999, rollout_length=128,
                  num_minibatches=8, epochs_ppo=3, clip_range_ppo=0.2,
-                 value_coef=0.5, ent_coef=0.01, lambd=0.95,
+                 coef_value=0.5, coef_ent=0.01, lambd=0.95,
                  max_grad_norm=0.5):
         super().__init__()
 
@@ -46,13 +46,14 @@ class BaseAgent(ABC):
             os.makedirs(summary_dir)
 
         self.steps = 0
+        self.update_steps = 0
         self.writer = SummaryWriter(log_dir=summary_dir)
         self.source_return = deque([0.0], maxlen=100)
         self.target_return = deque([0.0], maxlen=100)
 
         # Batch size.
         total_batches = rollout_length * source_venv.num_envs
-        self.batch_size_ppo = total_batches // num_minibatches
+        self.batch_size = total_batches // num_minibatches
         # Unroll length.
         self.rollout_length = rollout_length
         # Number of staps to update.
@@ -64,8 +65,8 @@ class BaseAgent(ABC):
         self.num_minibatches = num_minibatches
         self.epochs_ppo = epochs_ppo
         self.clip_range_ppo = clip_range_ppo
-        self.value_coef = value_coef
-        self.ent_coef = ent_coef
+        self.coef_value = coef_value
+        self.coef_ent = coef_ent
         self.max_grad_norm = max_grad_norm
 
     def run(self):

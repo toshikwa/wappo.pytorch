@@ -8,8 +8,12 @@ from pyvirtualdisplay import Display
 from wappo.agent import PPOAgent, WAPPOAgent
 from wappo.env import make_venv
 
+source_levels = [1543, 7991, 3671, 2336, 6420]
+target_levels = [7354, 9570, 6317, 6187, 8430]
+
 
 def main(args):
+    assert 0 <= args.trial < 5, 'trial must between [0, 5).'
 
     with Display(visible=0, size=(100, 100), backend="xvfb"):
         with open(args.config, 'r') as f:
@@ -22,17 +26,17 @@ def main(args):
         source_venv = make_venv(
             env_id=args.env_id,
             num_envs=config['env']['num_envs'],
-            num_levels=config['env']['num_levels']+args.seed)
+            num_levels=source_levels[args.trial])
         target_venv = make_venv(
             env_id=args.env_id,
             num_envs=config['env']['num_envs'],
-            num_levels=2**32-config['env']['num_levels']-args.seed)
+            num_levels=target_levels[args.trial])
 
         # Specify the directory to log.
         name = 'wappo' if args.wappo else 'ppo'
         time = datetime.now().strftime("%Y%m%d-%H%M")
         log_dir = os.path.join(
-            args.log_dir, f'{args.env_id}', f'{name}-{args.seed}-{time}')
+            args.log_dir, f'{args.env_id}', f'{name}-trial{args.trial}-{time}')
 
         # Save config.
         if not os.path.exists(log_dir):
@@ -59,7 +63,7 @@ if __name__ == "__main__":
     parser.add_argument('--config', type=str, default='config/wappo.yaml')
     parser.add_argument('--env_id', type=str, default='cartpole-visual-v1')
     parser.add_argument('--log_dir', default='logs')
-    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--trial', type=int, default=0)
     parser.add_argument('--cuda', action='store_true')
     parser.add_argument('--wappo', action='store_true')
     main(parser.parse_args())
