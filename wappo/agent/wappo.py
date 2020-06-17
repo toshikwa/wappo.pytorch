@@ -77,7 +77,8 @@ class WAPPOAgent(PPOAgent):
 
         self.optim_conf.zero_grad()
         loss_conf.backward()
-        clip_grad_norm_(self.ppo_network.parameters(), self.max_grad_norm)
+        clip_grad_norm_(
+            self.ppo_network.body_net.parameters(), self.max_grad_norm)
         self.optim_conf.step()
 
         return loss_conf.detach().item()
