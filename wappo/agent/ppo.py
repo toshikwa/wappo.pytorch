@@ -55,7 +55,7 @@ class PPOAgent(BaseAgent):
             -self.clip_range_ppo, self.clip_range_ppo)
         loss_value1 = (values - value_targets).pow(2)
         loss_value2 = (values_clipped - value_targets).pow(2)
-        loss_value = 0.5 * torch.max(loss_value1, loss_value2).mean()
+        loss_value = torch.max(loss_value1, loss_value2).mean()
         # >>> Value >>> #
 
         # >>> Policy >>> #
