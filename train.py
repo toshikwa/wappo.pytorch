@@ -2,6 +2,7 @@ from datetime import datetime
 import os
 import argparse
 import yaml
+import numpy as np
 import torch
 from pyvirtualdisplay import Display
 
@@ -13,7 +14,12 @@ target_levels = [7354, 9570, 6317, 6187, 8430]
 
 
 def main(args):
-    assert 0 <= args.trial < 5, 'trial must between [0, 5).'
+    assert 0 <= args.trial < 5, 'trial must be between [0, 5).'
+
+    torch.manual_seed(args.trial)
+    np.random.seed(args.trial)
+    torch.backends.cudnn.deterministic = True  # It harms a performance.
+    torch.backends.cudnn.benchmark = False  # It harms a performance.
 
     with Display(visible=0, size=(100, 100), backend="xvfb"):
         with open(args.config, 'r') as f:
