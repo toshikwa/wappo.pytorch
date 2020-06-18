@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Classic cart-pole system implemented by Rich Sutton et al.
-Copied from http://incompleteideas.net/sutton/book/code/pole.c
-permalink: https://perma.cc/C9ZM-652R
-"""
+# This file is mainly derived from https://github.com/joshnroy/gym-cartpole-visual.
 
 import math
 import gym
