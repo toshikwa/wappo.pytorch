@@ -17,5 +17,5 @@ ppo:
 wappo:
   lr_critic: 5.e-4
   epochs_critic: 5
-  clip_range_wgan: 0.01
+  clip_range_critic: 0.01
   coef_conf: 10.0

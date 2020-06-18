@@ -47,7 +47,6 @@ class PPONetwork(nn.Module):
         x, features = self.body_net(states)
         values = self.value_net(x)
         action_dists = self.policy_net(x)
-
         log_probs = action_dists.log_probs(actions)
         mean_entropy = action_dists.entropy().mean()
         return values, log_probs, mean_entropy, features
@@ -62,9 +61,9 @@ class ResidualBlock(nn.Module):
     def __init__(self, num_channels):
         super().__init__()
         self.net = nn.Sequential(
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2),
             nn.Conv2d(num_channels, num_channels, 3, 1, padding=1),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.LeakyReLU(0.2),
             nn.Conv2d(num_channels, num_channels, 3, 1, padding=1),
         )
 
@@ -89,13 +88,17 @@ class ConvSequence(nn.Module):
 
 class ImpalaCNNBody(nn.Module):
 
-    def __init__(self, num_channels):
+    def __init__(self, num_channels, depths=(16, 32, 32),
+                 num_initial_blocks=1):
         super().__init__()
-        self.feature_dim = 16 * 32 * 32
+        assert 1 <= num_initial_blocks <= 3
+
+        self.feature_dim = depths[num_initial_blocks-1] * \
+            (64 // 2 ** num_initial_blocks) ** 2
 
         in_channels = num_channels
         nets = []
-        for out_channels in (16, 32, 32):
+        for out_channels in depths:
             nets.append(ConvSequence(in_channels, out_channels))
             in_channels = out_channels
 
@@ -104,12 +107,13 @@ class ImpalaCNNBody(nn.Module):
                 Flatten(),
                 nn.LeakyReLU(0.2),
                 nn.Linear(32 * 8 * 8, 256),
-                nn.LeakyReLU(0.2)
+                nn.LeakyReLU(0.2),
             )
         )
 
-        self.initial_net = nets[0]
-        self.net = nn.Sequential(*nets[1:])
+        self.initial_net = nn.Sequential(
+            *[nets.pop(0) for _ in range(num_initial_blocks)])
+        self.net = nn.Sequential(*nets)
 
     def forward(self, states):
         assert states.dtype == torch.uint8

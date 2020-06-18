@@ -14,8 +14,8 @@ class WAPPOAgent(PPOAgent):
                  num_steps=10**6, lr_ppo=5e-4, gamma=0.999,
                  rollout_length=16, num_minibatches=8, epochs_ppo=3,
                  clip_range_ppo=0.2, coef_value=0.5, coef_ent=0.01,
-                 lambd=0.95, max_grad_norm=0.5, lr_critic=1e-4,
-                 epochs_critic=5, coef_conf=10.0, clip_range_wgan=0.01):
+                 lambd=0.95, max_grad_norm=0.5, lr_critic=5.e-4,
+                 epochs_critic=5, coef_conf=10.0, clip_range_critic=0.01):
         super().__init__(
             venv_source, venv_target, log_dir, device, num_steps, lr_ppo,
             gamma, rollout_length, num_minibatches, epochs_ppo, clip_range_ppo,
@@ -27,12 +27,11 @@ class WAPPOAgent(PPOAgent):
 
         # Optimizers.
         self.optim_critic = RMSprop(
-            self.network_critic.parameters(), lr=lr_critic,
-            alpha=0.9, eps=1e-10)
+            self.network_critic.parameters(), lr=lr_critic, alpha=0.9)
 
         self.epochs_critic = epochs_critic
         self.coef_conf = coef_conf
-        self.clip_range_wgan = clip_range_wgan
+        self.clip_range_critic = clip_range_critic
 
     def update(self):
         loss_policies = []
@@ -131,7 +130,7 @@ class WAPPOAgent(PPOAgent):
         self.optim_critic.step()
 
         for p in self.network_critic.parameters():
-            p.data.clamp_(-self.clip_range_wgan, self.clip_range_wgan)
+            p.data.clamp_(-self.clip_range_critic, self.clip_range_critic)
 
         return loss_critic.detach().item()
 

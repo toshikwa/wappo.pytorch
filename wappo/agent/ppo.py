@@ -27,7 +27,7 @@ class PPOAgent(BaseAgent):
 
         # Optimizer.
         self.optim_ppo = RMSprop(
-            self.network_ppo.parameters(), lr=lr_ppo, alpha=0.9, eps=1e-10)
+            self.network_ppo.parameters(), lr=lr_ppo, alpha=0.9)
 
     def update(self):
         loss_policies = []
