@@ -24,11 +24,13 @@ If you're using other than CUDA 10.2, you need to install PyTorch for the proper
 
 I trained WAPPO and PPO on `cartpole-visual-v1` as below. Following the WAPPO paper, results are averaged over 5 seeds. This graph corresponds to Figure 2 in the paper.
 
+Note that I changed some hyperparameters from the paper. I set 128 for `rollout_length` instead of 256, and 2 for `num_initial_blocks` instead of 1. Please refer to `config/cartpole.yaml` for details.
+
 ```bash
 python train.py --cuda --wappo --env_id cartpole-visual-v1 --config config/cartpole.yaml --trial 0
 ```
 
-<img src="https://user-images.githubusercontent.com/37267851/85052188-76f1df00-b1d3-11ea-8ccf-252d69bbb609.png" title="graph" width=600>
+<img src="https://user-images.githubusercontent.com/37267851/85052188-76f1df00-b1d3-11ea-8ccf-252d69bbb609.png" title="graph" width=500>
 
 ## References
 [[1]](https://arxiv.org/abs/2006.03465) Roy, Josh, and George Konidaris. "Visual Transfer for Reinforcement Learning via Wasserstein Domain Confusion."
