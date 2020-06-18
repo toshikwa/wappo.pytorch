@@ -13,7 +13,6 @@ ppo:
   coef_ent: 0.01
   lambd: 0.95
   max_grad_norm: 0.5
-  use_impala: True
 
 wappo:
   lr_critic: 5.e-4

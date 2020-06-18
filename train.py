@@ -18,8 +18,8 @@ def main(args):
 
     torch.manual_seed(args.trial)
     np.random.seed(args.trial)
-    torch.backends.cudnn.deterministic = True  # It harms a performance.
-    torch.backends.cudnn.benchmark = False  # It harms a performance.
+    # torch.backends.cudnn.deterministic = True  # It harms a performance.
+    # torch.backends.cudnn.benchmark = False  # It harms a performance.
 
     with Display(visible=0, size=(100, 100), backend="xvfb"):
         with open(args.config, 'r') as f:

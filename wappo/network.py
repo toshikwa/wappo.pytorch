@@ -17,21 +17,16 @@ class Flatten(nn.Module):
 
 class PPONetwork(nn.Module):
 
-    def __init__(self, img_shape, action_dim, use_impala=False):
+    def __init__(self, img_shape, action_dim):
         super().__init__()
-        self.feature_dim = 256 if use_impala else 512
-
-        if use_impala:
-            self.body_net = ImpalaCNNBody(img_shape[0], self.feature_dim)
-        else:
-            self.body_net = NatureCNNBody(img_shape[0], self.feature_dim)
-        self.value_net = nn.Linear(self.feature_dim, 1)
-        self.policy_net = Categorical(self.feature_dim, action_dim)
+        self.body_net = ImpalaCNNBody(img_shape[0])
+        self.value_net = nn.Linear(256, 1)
+        self.policy_net = Categorical(256, action_dim)
 
     def forward(self, states, deterministic=False):
-        features = self.body_net(states)
-        values = self.value_net(features)
-        action_dists = self.policy_net(features)
+        x, _ = self.body_net(states)
+        values = self.value_net(x)
+        action_dists = self.policy_net(x)
 
         if deterministic:
             actions = action_dists.mode()
@@ -41,23 +36,120 @@ class PPONetwork(nn.Module):
         return values, actions, log_probs
 
     def calculate_values(self, states):
-        features = self.body_net(states)
-        values = self.value_net(features)
+        x, _ = self.body_net(states)
+        values = self.value_net(x)
         return values
 
+    def calculate_features(self, states):
+        return self.body_net.calculate_features(states)
+
     def evaluate_actions(self, states, actions):
-        features = self.body_net(states)
-        values = self.value_net(features)
-        action_dists = self.policy_net(features)
+        x, features = self.body_net(states)
+        values = self.value_net(x)
+        action_dists = self.policy_net(x)
 
         log_probs = action_dists.log_probs(actions)
         mean_entropy = action_dists.entropy().mean()
         return values, log_probs, mean_entropy, features
 
+    @property
+    def feature_dim(self):
+        return self.body_net.feature_dim
+
+
+class ResidualBlock(nn.Module):
+
+    def __init__(self, num_channels):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(num_channels, num_channels, 3, 1, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(num_channels, num_channels, 3, 1, padding=1),
+        )
+
+    def forward(self, x):
+        return self.net(x) + x
+
+
+class ConvSequence(nn.Module):
+
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, 1, padding=1),
+            nn.MaxPool2d(3, 2, padding=1),
+            ResidualBlock(out_channels),
+            ResidualBlock(out_channels)
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+class ImpalaCNNBody(nn.Module):
+
+    def __init__(self, num_channels):
+        super().__init__()
+        self.feature_dim = 16 * 32 * 32
+
+        in_channels = num_channels
+        nets = []
+        for out_channels in (16, 32, 32):
+            nets.append(ConvSequence(in_channels, out_channels))
+            in_channels = out_channels
+
+        nets.append(
+            nn.Sequential(
+                Flatten(),
+                nn.LeakyReLU(0.2),
+                nn.Linear(32 * 8 * 8, 256),
+                nn.LeakyReLU(0.2)
+            )
+        )
+
+        self.initial_net = nets[0]
+        self.net = nn.Sequential(*nets[1:])
+
+    def forward(self, states):
+        assert states.dtype == torch.uint8
+        states = states.float().div_(255.0)
+        features = self.initial_net(states)
+        return self.net(features), features.view(-1, self.feature_dim)
+
+    def calculate_features(self, states):
+        assert states.dtype == torch.uint8
+        states = states.float().div_(255.0)
+        return self.initial_net(states).view(-1, self.feature_dim)
+
+
+class FixedCategorical(torch.distributions.Categorical):
+
+    def sample(self):
+        return super().sample().unsqueeze(-1)
+
+    def log_probs(self, actions):
+        return super().log_prob(actions.squeeze(-1)).view(
+            actions.size(0), -1).sum(-1).unsqueeze(-1)
+
+    def mode(self):
+        return self.probs.argmax(dim=-1, keepdim=True)
+
+
+class Categorical(nn.Module):
+
+    def __init__(self, input_dim, action_dim):
+        super().__init__()
+        self.linear = nn.Linear(input_dim, action_dim).apply(
+            partial(init_fn, gain=0.01))
+
+    def forward(self, x):
+        return FixedCategorical(logits=self.linear(x))
+
 
 class CriticNetwork(nn.Module):
 
-    def __init__(self, feature_dim=512):
+    def __init__(self, feature_dim=16*32*32):
         super().__init__()
 
         self.net = nn.Sequential(
@@ -78,100 +170,7 @@ class CriticNetwork(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(512, 512),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(512, 1)).apply(partial(
-                init_fn, gain=nn.init.calculate_gain('leaky_relu', 0.2)))
+            nn.Linear(512, 1))
 
     def forward(self, features):
         return self.net(features)
-
-
-class NatureCNNBody(nn.Module):
-
-    def __init__(self, num_channels, feature_dim=512):
-        super().__init__()
-
-        self.net = nn.Sequential(
-            nn.Conv2d(num_channels, 32, 8, stride=4),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, 4, stride=2),
-            nn.ReLU(),
-            nn.Conv2d(64, 32, 3, stride=1),
-            nn.ReLU(),
-            Flatten(),
-            nn.Linear(32 * 4 * 4, feature_dim),
-            nn.ReLU()
-        )
-
-    def forward(self, states):
-        assert states.dtype == torch.uint8
-        states = states.float().div_(255.0)
-        return self.net(states)
-
-
-class ResidualBlock(nn.Module):
-
-    def __init__(self, num_channels):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Conv2d(num_channels, num_channels, 3, 1, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(num_channels, num_channels, 3, 1, padding=1),
-            nn.ReLU(inplace=True)
-        )
-
-    def forward(self, x):
-        return self.net(x) + x
-
-
-class ImpalaCNNBody(nn.Module):
-
-    def __init__(self, num_channels, feature_dim=256):
-        super().__init__()
-
-        in_channels = num_channels
-        layers = []
-        for out_channels, num_blocks in [(16, 2), (32, 2), (32, 2)]:
-            layers.extend([
-                nn.Conv2d(in_channels, out_channels, 3, 1, padding=1),
-                nn.ReLU(inplace=True),
-                nn.MaxPool2d(3, 2, padding=1)
-            ])
-            for _ in range(num_blocks):
-                layers.append(ResidualBlock(out_channels))
-            in_channels = out_channels
-
-        layers.extend([
-            Flatten(),
-            nn.Linear(32 * 8 * 8, feature_dim),
-            nn.ReLU(inplace=True)
-        ])
-        self.net = nn.Sequential(*layers)
-
-    def forward(self, states):
-        assert states.dtype == torch.uint8
-        states = states.float().div_(255.0)
-        return self.net(states)
-
-
-class FixedCategorical(torch.distributions.Categorical):
-
-    def sample(self):
-        return super().sample().unsqueeze(-1)
-
-    def log_probs(self, actions):
-        return super().log_prob(actions.squeeze(-1)).view(
-            actions.size(0), -1).sum(-1).unsqueeze(-1)
-
-    def mode(self):
-        return self.probs.argmax(dim=-1, keepdim=True)
-
-
-class Categorical(nn.Module):
-
-    def __init__(self, feature_dim, action_dim):
-        super().__init__()
-        self.linear = nn.Linear(feature_dim, action_dim).apply(
-            partial(init_fn, gain=0.01))
-
-    def forward(self, features):
-        return FixedCategorical(logits=self.linear(features))

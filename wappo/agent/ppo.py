@@ -14,7 +14,7 @@ class PPOAgent(BaseAgent):
                  num_steps=10**6, lr_ppo=5e-4, gamma=0.999,
                  rollout_length=16, num_minibatches=8, epochs_ppo=3,
                  clip_range_ppo=0.2, coef_value=0.5, coef_ent=0.01,
-                 lambd=0.95, max_grad_norm=0.5, use_impala=True):
+                 lambd=0.95, max_grad_norm=0.5):
         super().__init__(
             venv_source, venv_target, log_dir, device, num_steps, gamma,
             rollout_length, num_minibatches, epochs_ppo, clip_range_ppo,
@@ -23,11 +23,11 @@ class PPOAgent(BaseAgent):
         # PPO network.
         self.network_ppo = PPONetwork(
             self.venv_source.observation_space.shape,
-            self.venv_source.action_space.n,
-            use_impala=use_impala).to(device)
+            self.venv_source.action_space.n).to(device)
 
         # Optimizer.
-        self.optim_ppo = RMSprop(self.network_ppo.parameters(), lr=lr_ppo)
+        self.optim_ppo = RMSprop(
+            self.network_ppo.parameters(), lr=lr_ppo, alpha=0.9, eps=1e-10)
 
     def update(self):
         loss_policies = []
