@@ -1,5 +1,5 @@
 # WAPPO in PyTorch
-This is a PyTorch implementation of WAPPO[[1]](#references). I tried to make it easy for readers to understand the algorithm. Please let me know if you have any questions.
+This is a PyTorch implementation of Wasserstein Adversarial Proximal Policy Optimization (WAPPO)[[1]](#references). I tried to make it easy for readers to understand the algorithm. Please let me know if you have any questions.
 
 ## Setup
 If you are using Anaconda, first create the virtual environment.
