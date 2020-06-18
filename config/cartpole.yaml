@@ -5,7 +5,7 @@ ppo:
   num_steps: 1000000
   lr_ppo: 5.e-4
   gamma: 0.999
-  rollout_length: 256
+  rollout_length: 128
   num_minibatches: 8
   epochs_ppo: 3
   clip_range_ppo: 0.2
@@ -13,6 +13,7 @@ ppo:
   coef_ent: 0.01
   lambd: 0.95
   max_grad_norm: 0.5
+  num_initial_blocks: 2
 
 wappo:
   lr_critic: 5.e-4

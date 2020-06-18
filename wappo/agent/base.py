@@ -6,6 +6,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from wappo.storage import SourceStorage, TargetStorage
+from wappo.utils import ResultLogger
 
 
 class BaseAgent(ABC):
@@ -50,6 +51,7 @@ class BaseAgent(ABC):
         self.writer = SummaryWriter(log_dir=summary_dir)
         self.source_return = deque([0.0], maxlen=100)
         self.target_return = deque([0.0], maxlen=100)
+        self.result_logger = ResultLogger(log_dir)
 
         # Batch size.
         total_batches = rollout_length * venv_source.num_envs
@@ -80,14 +82,19 @@ class BaseAgent(ABC):
             self.run_target()
             self.update()
 
+            source_return = np.mean(self.source_return)
+            target_return = np.mean(self.target_return)
+
             print(f"Steps: {self.steps}   "
-                  f"Source Return: {np.mean(self.source_return):5.3f}  "
-                  f"Target Return: {np.mean(self.target_return):5.3f}")
+                  f"Source Return: {source_return:5.3f}  "
+                  f"Target Return: {target_return:5.3f}")
 
             self.writer.add_scalar(
-                'return/source', np.mean(self.source_return), self.steps)
+                'return/source', source_return, self.steps)
             self.writer.add_scalar(
-                'return/target', np.mean(self.target_return), self.steps)
+                'return/target', target_return, self.steps)
+
+            self.result_logger.add(self.steps, source_return, target_return)
             self.save_models(os.path.join(self.model_dir, f'step{self.steps}'))
 
         self.save_models(os.path.join(self.model_dir, 'final'))

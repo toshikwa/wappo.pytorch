@@ -1,4 +1,6 @@
+import os
 import numpy as np
+import pandas as pd
 
 
 def tile_images(nhwc):
@@ -53,3 +55,28 @@ class LRAnneaer:
     def get(self):
         assert 0 < self.steps <= self.num_steps
         return self.a * self.steps + self.b
+
+
+class ResultLogger:
+
+    def __init__(self, log_dir):
+        self.path = os.path.join(log_dir, 'result.csv')
+        self.results = {
+            'step': [],
+            'source': [],
+            'target': []
+        }
+        self.make_df()
+
+    def make_df(self):
+        self.df = pd.DataFrame.from_dict(self.results)
+
+    def add(self, step, source, target):
+        self.results['step'].append(step)
+        self.results['source'].append(source)
+        self.results['target'].append(target)
+        self.make_df()
+        self.save()
+
+    def save(self):
+        self.df.to_csv(self.path, index=False)

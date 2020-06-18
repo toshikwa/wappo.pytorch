@@ -17,9 +17,9 @@ class Flatten(nn.Module):
 
 class PPONetwork(nn.Module):
 
-    def __init__(self, img_shape, action_dim):
+    def __init__(self, img_shape, action_dim, num_initial_blocks=1):
         super().__init__()
-        self.body_net = ImpalaCNNBody(img_shape[0])
+        self.body_net = ImpalaCNNBody(img_shape[0], num_initial_blocks)
         self.value_net = nn.Linear(256, 1)
         self.policy_net = Categorical(256, action_dim)
 
@@ -63,7 +63,7 @@ class ResidualBlock(nn.Module):
         self.net = nn.Sequential(
             nn.LeakyReLU(0.2),
             nn.Conv2d(num_channels, num_channels, 3, 1, padding=1),
-            nn.LeakyReLU(0.2),
+            nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(num_channels, num_channels, 3, 1, padding=1),
         )
 
@@ -88,8 +88,8 @@ class ConvSequence(nn.Module):
 
 class ImpalaCNNBody(nn.Module):
 
-    def __init__(self, num_channels, depths=(16, 32, 32),
-                 num_initial_blocks=1):
+    def __init__(self, num_channels, num_initial_blocks=1,
+                 depths=(16, 32, 32)):
         super().__init__()
         assert 1 <= num_initial_blocks <= 3
 
@@ -104,10 +104,10 @@ class ImpalaCNNBody(nn.Module):
 
         nets.append(
             nn.Sequential(
+                nn.LeakyReLU(0.2),
                 Flatten(),
-                nn.LeakyReLU(0.2),
                 nn.Linear(32 * 8 * 8, 256),
-                nn.LeakyReLU(0.2),
+                nn.LeakyReLU(0.2, inplace=True),
             )
         )
 
