@@ -32,11 +32,13 @@ def main(args):
         venv_source = make_venv(
             env_id=args.env_id,
             num_envs=config['env']['num_envs'],
-            num_levels=source_levels[args.trial])
+            num_levels=1,
+            start_level=source_levels[args.trial])
         venv_target = make_venv(
             env_id=args.env_id,
             num_envs=config['env']['num_envs'],
-            num_levels=target_levels[args.trial])
+            num_levels=1,
+            start_level=target_levels[args.trial])
 
         # Specify the directory to log.
         name = 'wappo' if args.wappo else 'ppo'

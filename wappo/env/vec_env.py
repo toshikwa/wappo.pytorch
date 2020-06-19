@@ -1,6 +1,7 @@
 # This file is mainly derived from https://github.com/openai/baselines.
 
 from abc import ABC, abstractmethod
+from gym.spaces import Box
 
 from wappo.utils import tile_images
 
@@ -126,3 +127,22 @@ class VecExtractDictObs(VecEnvObservationWrapper):
 
     def process(self, obs):
         return obs[self.key]
+
+
+class TransposeImage(VecEnvWrapper):
+    def __init__(self, env=None):
+        VecEnvWrapper.__init__(self, env)
+        H, W, C = self.observation_space.shape
+        self.observation_space = Box(
+            self.observation_space.low[0, 0, 0],
+            self.observation_space.high[0, 0, 0],
+            [C, H, W],
+            dtype=self.observation_space.dtype)
+
+    def step_wait(self):
+        obs, rews, dones, infos = self.venv.step_wait()
+        return obs.transpose(0, 3, 1, 2).copy(), rews, dones, infos
+
+    def reset(self):
+        obs = self.venv.reset()
+        return obs.transpose(0, 3, 1, 2).copy()

@@ -40,19 +40,21 @@ class CartPoleVisualEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=0, high=255, shape=(3, 64, 64), dtype=np.uint8)
 
-        self.start_level = start_level
         self.num_levels = num_levels
-        self.seed_set()
+        self.offset = start_level
+        if self.num_levels == 0:
+            self.seed = self.seed_set(np.random.randint(0, 2**32))
+        else:
+            to_set = np.random.randint(0, self.num_levels) + self.offset
+            self.seed = self.seed_set(to_set)
+
         self.viewer = None
         self.state = None
         self.steps_beyond_done = None
 
-    def seed_set(self):
-        if self.num_levels == 0:
-            seed = np.random.randint(low=0, high=2**32)
-        else:
-            seed = self.num_levels
-        self.np_random, self.seed = seeding.np_random(seed)
+    def seed_set(self, seed):
+        self.np_random, seed = seeding.np_random(seed)
+        return seed
 
     def step(self, action):
         assert self.action_space.contains(action)
@@ -101,7 +103,12 @@ class CartPoleVisualEnv(gym.Env):
         return self._process_obs(img), reward, done, dic
 
     def reset(self):
-        self.seed_set()
+        if self.num_levels == 0:
+            self.seed = self.seed_set(np.random.randint(0, 2**32))
+        else:
+            to_set = np.random.randint(0, self.num_levels) + self.offset
+            self.seed = self.seed_set(to_set)
+
         self.state = np.random.uniform(low=-0.05, high=0.05, size=(4,))
         self.steps_beyond_done = None
         img = self.render()
