@@ -9,6 +9,7 @@ from .vec_normalize import VecNormalize
 
 def make_venv(env_id, num_envs=4, num_levels=0, start_level=0,
               distribution_mode='easy'):
+
     if env_id == 'cartpole-visual-v1':
         venv = gym.vector.make(
             'cartpole-visual-v1', num_envs=num_envs,
@@ -16,6 +17,7 @@ def make_venv(env_id, num_envs=4, num_levels=0, start_level=0,
         venv.observation_space = gym.spaces.Box(
             low=0, high=255, shape=(3, 64, 64), dtype=np.uint8)
         venv.action_space = gym.spaces.Discrete(2)
+
     else:
         venv = ProcgenEnv(
             env_name=env_id, num_envs=num_envs, num_levels=num_levels,
