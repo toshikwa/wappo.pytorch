@@ -72,7 +72,10 @@ class BaseAgent(ABC):
         self.max_grad_norm = max_grad_norm
 
     def run(self):
-
+        self.writer.add_image(
+            'image/source_env', self.states_source[0], self.steps)
+        self.writer.add_image(
+            'image/target_env', self.states_target[0], self.steps)
         for step in range(self.num_updates):
             self.run_source()
             self.run_target()
@@ -89,11 +92,6 @@ class BaseAgent(ABC):
                 'return/source', source_return, self.steps)
             self.writer.add_scalar(
                 'return/target', target_return, self.steps)
-
-            self.writer.add_image(
-                'image/source_env', self.states_source[0], self.steps)
-            self.writer.add_image(
-                'image/target_env', self.states_target[0], self.steps)
 
             self.result_logger.add(self.steps, source_return, target_return)
             self.save_models(os.path.join(self.model_dir, f'step{self.steps}'))
